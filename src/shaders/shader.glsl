@@ -1,11 +1,11 @@
 /* quad vertex shader */
 @vs vs
 
-in vec4 position;
+in vec2 position;
 out vec2 uv;
 
 void main() {
-    gl_Position = position * 2.0 - 1.0;
+    gl_Position = vec4(position*2.0-1.0, 0.5, 1.0);
     uv = vec2(position.x, 1.0 - position.y);
 }
 @end

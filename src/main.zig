@@ -128,7 +128,7 @@ pub fn render() !void {
         if (a.x > 0 and a.y > 0 and b.x > 0 and b.y > 0 and c.x > 0 and c.y > 0) {
             var aabb = AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y);
 
-            var area = edgeFunction(a, b, c.x, c.y );
+            var area = edgeFunction(a, b, c.x, c.y);
 
             var x: u32 = aabb.min_x;
             var y: u32 = aabb.min_y;
@@ -202,7 +202,6 @@ const state = struct {
 };
 
 export fn init() void {
-
     const time_0 = std.time.milliTimestamp();
     render() catch |err| {
         std.debug.print("error: {any}", .{err});
@@ -213,14 +212,7 @@ export fn init() void {
 
     sg.setup(.{ .context = sgapp.context() });
 
-    const vertex_buffer = sg.makeBuffer(.{ .data = sg.asRange(&[_]f32{
-        -1.0, 1.0,  0.5,
-        1.0,  1.0,  0.5,
-        1.0,  -1.0, 0.5,
-        -1.0, -1.0, 0.5,
-    }) });
-
-    const index_buffer = sg.makeBuffer(.{ .type = .INDEXBUFFER, .data = sg.asRange(&[_]u16{ 0, 1, 2, 0, 2, 3 }) });
+    const quad_vbuf = sg.makeBuffer(.{ .data = sg.asRange(&[_]f32{ 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0 }) });
 
     var fb_img_desc: sg.ImageDesc = .{
         .width = width,
@@ -236,27 +228,24 @@ export fn init() void {
     };
     db_img_desc.data.subimage[0][0] = sg.asRange(depth_buffer.buffer);
 
-    state.bind.vertex_buffers[0] = vertex_buffer;
-    state.bind.index_buffer = index_buffer;
+    state.bind.vertex_buffers[0] = quad_vbuf;
     state.bind.fs_images[shd.SLOT_tex] = sg.makeImage(fb_img_desc);
     var pip_desc: sg.PipelineDesc = .{
-        .index_type = .UINT16,
+        .primitive_type = .TRIANGLE_STRIP,
         .shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend())),
     };
-    pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT3;
+    pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT2;
     state.pip = sg.makePipeline(pip_desc);
 
-    state.dbg_bind.vertex_buffers[0] = vertex_buffer;
-    state.dbg_bind.index_buffer = index_buffer;
+    state.dbg_bind.vertex_buffers[0] = quad_vbuf;
     state.dbg_bind.fs_images[shd.SLOT_tex] = sg.makeImage(db_img_desc);
     var dbg_pip_desc: sg.PipelineDesc = .{
-        .index_type = .UINT16,
+        .primitive_type = .TRIANGLE_STRIP,
         .shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend())),
     };
-    dbg_pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT3;
+    dbg_pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT2;
     state.dbg_pip = sg.makePipeline(dbg_pip_desc);
 
-    // clear to black
     state.pass_action.colors[0] = .{ .action = .CLEAR, .value = .{ .r = 0, .g = 0, .b = 0, .a = 1 } };
 }
 
@@ -264,7 +253,7 @@ export fn frame() void {
     sg.beginDefaultPass(state.pass_action, sapp.width(), sapp.height());
     sg.applyPipeline(state.pip);
     sg.applyBindings(state.bind);
-    sg.draw(0, 6, 1);
+    sg.draw(0, 4, 1);
 
     sg.applyPipeline(state.dbg_pip);
     sg.applyViewport(0 * 150, 0, 150, 150, false);
