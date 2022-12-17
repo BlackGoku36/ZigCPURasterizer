@@ -75,8 +75,7 @@ pub fn render() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
 
-    // TODO: check if it is cheaper to clear or destroy-create buffer, we keep it commented for now.
-    // frame_buffer.clearColor(Color{ .r = 100, .g = 0, .b = 100 });
+    frame_buffer.clearColor(1.0);
     depth_buffer.clearColor(1.0);
 
     var mesh = try Mesh.fromObjFile("spot_mesh.obj", allocator);

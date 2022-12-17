@@ -76,13 +76,7 @@ pub const RenderTargetRGBA16 = struct {
         self.buffer[y * 4 * self.width + (x * 4 + 3)] = 1.0;
     }
 
-    pub fn clearColor(self: *RenderTargetRGBA16, color: Color) void {
-        var i: u32 = 0;
-        while( i < self.width*self.height*4) : (i += 4){
-            self.buffer[i] = color.r;
-            self.buffer[i+1] = color.g;
-            self.buffer[i+2] = color.b;
-            self.buffer[i+3] = 1.0;
-        }
+    pub fn clearColor(self: *RenderTargetRGBA16, value: f16) void {
+        std.mem.set(f16, self.buffer, value);
     }
 };
