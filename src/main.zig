@@ -3,8 +3,8 @@ const std = @import("std");
 const Vec3 = @import("vec3.zig").Vec3;
 const Vec2 = @import("vec2.zig").Vec2;
 const Matrix4 = @import("matrix4.zig").Matrix4;
-const RenderTargetRGBA32 = @import("renderer/rendertarget.zig").RenderTargetRGBA32;
-const RenderTargetR32 = @import("renderer/rendertarget.zig").RenderTargetR32;
+const RenderTargetRGBA16 = @import("renderer/rendertarget.zig").RenderTargetRGBA16;
+const RenderTargetR16 = @import("renderer/rendertarget.zig").RenderTargetR16;
 const Color = @import("renderer/rendertarget.zig").Color;
 const Mesh = @import("mesh.zig").Mesh;
 const zigimg = @import("zigimg");
@@ -66,16 +66,17 @@ fn windingOrderTest(order: WindingOrder, w0: f32, w1: f32, w2: f32) bool {
 }
 
 var arenea = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-var frame_buffer: RenderTargetRGBA32 = undefined;
-var depth_buffer: RenderTargetR32 = undefined;
+var frame_buffer: RenderTargetRGBA16 = undefined;
+var depth_buffer: RenderTargetR16 = undefined;
 
 pub fn render() !void {
     const allocator = arenea.allocator();
 
-    frame_buffer = RenderTargetRGBA32.create(allocator, width, height);
-    depth_buffer = RenderTargetR32.create(allocator, width, height);
+    frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
+    depth_buffer = RenderTargetR16.create(allocator, width, height);
 
-    frame_buffer.clearColor(Color{ .r = 100, .g = 0, .b = 100 });
+    // TODO: check if it is cheaper to clear or destroy-create buffer, we keep it commented for now.
+    // frame_buffer.clearColor(Color{ .r = 100, .g = 0, .b = 100 });
     depth_buffer.clearColor(1.0);
 
     var mesh = try Mesh.fromObjFile("spot_mesh.obj", allocator);
@@ -149,7 +150,7 @@ pub fn render() !void {
                         var z = 1.0 / (w1 * a.z + w2 * b.z + w0 * c.z);
 
                         if (z < depth_buffer.getPixel(x, y)) {
-                            depth_buffer.putPixel(x, y, z);
+                            depth_buffer.putPixel(x, y, @floatCast(f16, z));
 
                             var u = w1 * a_uv.x + w2 * b_uv.x + w0 * c_uv.x;
                             var v = w1 * a_uv.y + w2 * b_uv.y + w0 * c_uv.y;
@@ -177,7 +178,9 @@ pub fn render() !void {
                             albedo.g *= pong;
                             albedo.b *= pong;
 
-                            frame_buffer.putPixel(x, y, Color{ .r = albedo.r, .g = albedo.g, .b = albedo.b });
+                            frame_buffer.putPixel(x, y, Color{ .r = @floatCast(f16,albedo.r), 
+                                    .g = @floatCast(f16,albedo.g), 
+                                        .b = @floatCast(f16,albedo.b) });
                         }
                     }
                 }
@@ -217,14 +220,14 @@ export fn init() void {
     var fb_img_desc: sg.ImageDesc = .{
         .width = width,
         .height = height,
-        .pixel_format = sg.PixelFormat.RGBA32F,
+        .pixel_format = sg.PixelFormat.RGBA16F,
     };
     fb_img_desc.data.subimage[0][0] = sg.asRange(frame_buffer.buffer);
 
     var db_img_desc: sg.ImageDesc = .{
         .width = width,
         .height = height,
-        .pixel_format = sg.PixelFormat.R32F,
+        .pixel_format = sg.PixelFormat.R16F,
     };
     db_img_desc.data.subimage[0][0] = sg.asRange(depth_buffer.buffer);
 
