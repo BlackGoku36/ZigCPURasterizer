@@ -72,7 +72,7 @@ pub const Mesh = struct {
         }
     }
 
-    pub fn destroy(self: *Mesh) void {
+    pub fn deinit(self: *Mesh) void {
         self.vertices.deinit();
         self.indices.deinit();
         self.uvs.deinit();
