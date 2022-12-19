@@ -13,7 +13,6 @@ const sokol = @import("sokol");
 pub const width = 1280;
 pub const height = 720;
 
-const color = extern struct { r: u8 = 0, g: u8 = 0, b: u8 = 0 };
 const WindingOrder = enum { CW, CCW };
 const AABB = struct {
     min_x: u32,
@@ -75,7 +74,7 @@ var texture: zigimg.Image = undefined;
 
 var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
-var aspect_ratio: f32 = 0.0;
+const aspect_ratio: f32 = @intToFloat(f32, width) / @intToFloat(f32, height);
 
 pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
@@ -84,7 +83,6 @@ pub fn init() !void {
     texture = try zigimg.Image.fromFilePath(allocator, "spot_texture.png");
     tex_width_f32 = @intToFloat(f32, texture.width);
     tex_height_f32 = @intToFloat(f32, texture.height);
-    aspect_ratio = tex_width_f32 / tex_height_f32;
 }
 
 pub fn render() !void {
