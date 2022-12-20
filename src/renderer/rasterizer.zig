@@ -77,6 +77,19 @@ var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
 const aspect_ratio: f32 = @intToFloat(f32, width) / @intToFloat(f32, height);
 
+const winding_order = WindingOrder.CCW;
+
+const light_from = Vec3{ .x = 3.0, .y = 2.0, .z = -2.0 };
+const light_to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+
+const from = Vec3{ .x = 3.0, .y = 1.5, .z = -2.0 };
+// var from = Vec3{ .x = 1.5, .y = 1.5, .z = 1.5 };
+const to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+const up = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
+
+const projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 1.0, 20.0);
+const view_mat = Matrix4.lookAt(from, to, up);
+
 pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
@@ -91,18 +104,6 @@ pub fn render(theta: f32) !void {
     frame_buffer.clearColor(1.0);
     depth_buffer.clearColor(1.0);
 
-    var winding_order = WindingOrder.CCW;
-
-    var light_from = Vec3{ .x = 3.0, .y = 2.0, .z = -2.0 };
-    var light_to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-
-    var from = Vec3{ .x = 3.0, .y = 1.5, .z = -2.0 };
-    // var from = Vec3{ .x = 1.5, .y = 1.5, .z = 1.5 };
-    var to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-    var up = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
-
-    var projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 1.0, 20.0);
-    var view_mat = Matrix4.lookAt(from, to, up);
     var model_mat = Matrix4.rotateY(theta);
 
     var model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
@@ -118,7 +119,7 @@ pub fn render(theta: f32) !void {
         var vert2 = mesh.vertices.items[index2];
         var vert3 = mesh.vertices.items[index3];
 
-        var normal = Matrix4.multVec3(Matrix4.rotateY(theta), mesh.normals.items[mesh.normal_indices.items[i + 0]]);
+        var normal = Matrix4.multVec3(model_mat, mesh.normals.items[mesh.normal_indices.items[i + 0]]);
 
         if (Vec3.dot(normal, Vec3.sub(from, vert1)) > -0.22) {
             var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
