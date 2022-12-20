@@ -101,8 +101,9 @@ pub fn render(theta: f32) !void {
     var projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 1.0, 10.0);
     var view_mat = Matrix4.lookAt(from, to, up);
     var model_mat = Matrix4.rotateY(theta);
+
     var model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
-    var model_view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
+    var view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
 
     var i: u32 = 0;
     while (i < mesh.indices.items.len) : (i += 3) {
@@ -114,9 +115,14 @@ pub fn render(theta: f32) !void {
         var vert2 = mesh.vertices.items[index2 - 1];
         var vert3 = mesh.vertices.items[index3 - 1];
 
-        var a = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert1), width, height);
-        var b = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert2), width, height);
-        var c = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert3), width, height);
+        var normal =  Matrix4.multVec3(Matrix4.rotateY(theta), mesh.normals.items[mesh.normal_indices.items[i + 0] - 1]);
+
+        var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
+        var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
+
+        var a = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert1), width, height);
+        var b = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert2), width, height);
+        var c = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert3), width, height);
 
         var a_uv = mesh.uvs.items[mesh.uv_indices.items[i + 0] - 1];
         a_uv.x *= a.z;
@@ -171,11 +177,6 @@ pub fn render(theta: f32) !void {
                             var tex_v = @floatToInt(u32, v * tex_height_f32);
 
                             var albedo = texture.pixels.rgb24[tex_v * texture.width + tex_u].toColorf32();
-
-                            var normal = mesh.normals.items[mesh.normal_indices.items[i + 0] - 1];
-
-                            var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
-                            var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
 
                             albedo.r *= pong;
                             albedo.g *= pong;
