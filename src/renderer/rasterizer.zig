@@ -119,9 +119,9 @@ pub fn render(theta: f32) !void {
         var vert2 = mesh.vertices.items[index2];
         var vert3 = mesh.vertices.items[index3];
 
-        var normal = Matrix4.multVec3(model_mat, mesh.normals.items[mesh.normal_indices.items[i + 0]]);
+        var normal = Vec3.normalize(Matrix4.multVec3(model_mat, mesh.normals.items[mesh.normal_indices.items[i + 0]]));
 
-        if (Vec3.dot(normal, Vec3.sub(from, vert1)) > -0.22) {
+        if (Vec3.dot(normal, Vec3.normalize(Vec3.sub(from, vert1))) > -0.25) {
             var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
             var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
 
