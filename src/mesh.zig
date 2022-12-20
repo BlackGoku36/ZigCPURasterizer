@@ -1,6 +1,6 @@
 const std = @import("std");
-const Vec3 = @import("vec3.zig").Vec3;
-const Vec2 = @import("vec2.zig").Vec2;
+const Vec3 = @import("math/vec3.zig").Vec3;
+const Vec2 = @import("math/vec2.zig").Vec2;
 
 pub const Mesh = struct {
     vertices: std.ArrayList(Vec3),

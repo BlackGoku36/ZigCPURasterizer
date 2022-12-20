@@ -1,5 +1,5 @@
 const std = @import("std");
-const Vec2 = @import("../vec2.zig").Vec2;
+const Vec2 = @import("../math/vec2.zig").Vec2;
 
 pub const Color = struct { r: f16, g: f16, b: f16 };
 

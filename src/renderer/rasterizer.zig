@@ -1,14 +1,16 @@
 const std = @import("std");
-
-const Vec3 = @import("../vec3.zig").Vec3;
-const Vec2 = @import("../vec2.zig").Vec2;
-const Matrix4 = @import("../matrix4.zig").Matrix4;
-const RenderTargetRGBA16 = @import("rendertarget.zig").RenderTargetRGBA16;
-const RenderTargetR16 = @import("rendertarget.zig").RenderTargetR16;
-const Color = @import("rendertarget.zig").Color;
-const Mesh = @import("../mesh.zig").Mesh;
 const zigimg = @import("zigimg");
-const sokol = @import("sokol");
+
+const Vec3 = @import("../math/vec3.zig").Vec3;
+const Vec2 = @import("../math/vec2.zig").Vec2;
+const Matrix4 = @import("../math/matrix4.zig").Matrix4;
+
+const rendertarget = @import("rendertarget.zig");
+const RenderTargetRGBA16 = rendertarget.RenderTargetRGBA16;
+const RenderTargetR16 = rendertarget.RenderTargetR16;
+const Color = rendertarget.Color;
+
+const Mesh = @import("../mesh.zig").Mesh;
 
 pub const width = 1280;
 pub const height = 720;

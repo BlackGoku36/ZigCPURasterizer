@@ -1,10 +1,11 @@
 const std = @import("std");
+const sokol = @import("sokol");
 
-const sg = @import("sokol").gfx;
-const sapp = @import("sokol").app;
-const sgapp = @import("sokol").app_gfx_glue;
+const sg = sokol.gfx;
+const sapp = sokol.app;
+const sgapp = sokol.app_gfx_glue;
+
 const shd = @import("shaders/shader.glsl.zig");
-
 const rasterizer = @import("renderer/rasterizer.zig");
 
 const state = struct {
