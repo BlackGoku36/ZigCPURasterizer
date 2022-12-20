@@ -33,7 +33,7 @@ pub const Matrix4 = struct {
     }
 
     pub fn multMatrix4(a: Matrix4, b: Matrix4) Matrix4 {
-        var out_mat = getZero();
+        var out_mat = comptime getZero();
 
         var x: u8 = 0;
         var y: u8 = 0;
@@ -42,11 +42,11 @@ pub const Matrix4 = struct {
 
         while (x < 4) : (x += 1) {
             while (y < 4) : (y += 1) {
-                t = getMatrix4(a, 0, y) * getMatrix4(b, x, 0);
+                t = a.mat[y * 4 + 0] * b.mat[0 * 4 + x];
                 while (i < 4) : (i += 1) {
-                    t += getMatrix4(a, i, y) * getMatrix4(b, x, i);
+                    t += a.mat[y * 4 + i] * b.mat[i * 4 + x];
                 }
-                setMatrix4(&out_mat, x, y, t);
+                out_mat.mat[y * 4 + x] = t;
                 i = 1;
             }
             y = 0;
@@ -71,7 +71,7 @@ pub const Matrix4 = struct {
     }
 
     pub fn lookAt(from: Vec3, to: Vec3, up: Vec3) Matrix4 {
-        var out_mat: Matrix4 = getZero();
+        var out_mat: Matrix4 = comptime getZero();
 
         var forward: Vec3 = Vec3.normalize(Vec3.sub(to, from));
         var right: Vec3 = Vec3.normalize(Vec3.cross(forward, up));
@@ -88,16 +88,13 @@ pub const Matrix4 = struct {
         out_mat.mat[9] = -forward.y;
         out_mat.mat[10] = -forward.z;
         out_mat.mat[11] = Vec3.dot(forward, from);
-        out_mat.mat[12] = 0;
-        out_mat.mat[13] = 0;
-        out_mat.mat[14] = 0;
         out_mat.mat[15] = 1;
 
         return out_mat;
     }
 
     pub fn perspectiveProjection(fov: f32, aspect: f32, near: f32, far: f32) Matrix4 {
-        var out_mat: Matrix4 = getZero();
+        var out_mat: Matrix4 = comptime getZero();
 
         var scale_height: f32 = 1.0 / @tan(fov / 2.0);
         var scale_width: f32 = scale_height / aspect;
@@ -112,7 +109,7 @@ pub const Matrix4 = struct {
     }
 
     pub fn orthogonalProjection(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Matrix4 {
-        var out_mat: Matrix4 = getZero();
+        var out_mat: Matrix4 = comptime getZero();
 
         var rl = right - left;
         var tb = top - bottom;
@@ -133,11 +130,18 @@ pub const Matrix4 = struct {
     }
 
     pub fn rotateY(theta: f32) Matrix4 {
+        var out_mat: Matrix4 = comptime getZero();
+
         var ct = @cos(theta);
         var st = @sin(theta);
 
-        var mat = [4 * 4]f32{ ct, 0, st, 0, 0, 1, 0, 0, -st, 0, ct, 0, 0, 0, 0, 1 };
-        var out_mat = Matrix4{ .mat = mat };
+        out_mat.mat[0] = ct;
+        out_mat.mat[2] = st;
+        out_mat.mat[5] = 1;
+        out_mat.mat[8] = -st;
+        out_mat.mat[10] = ct;
+        out_mat.mat[15] = 1;
+
         return out_mat;
     }
 
