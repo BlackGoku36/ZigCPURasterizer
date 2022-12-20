@@ -27,14 +27,10 @@ const AABB = struct {
 
     fn getFrom(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) AABB {
         var min_x = std.math.min(std.math.min(ax, bx), cx);
-        min_x = std.math.max(0, std.math.min(width - 1, min_x));
         var min_y = std.math.min(std.math.min(ay, by), cy);
-        min_y = std.math.max(0, std.math.min(height - 1, min_y));
 
         var max_x = std.math.max(std.math.max(ax, bx), cx);
-        max_x = std.math.max(0, std.math.min(width - 1, max_x));
         var max_y = std.math.max(std.math.max(ay, by), cy);
-        max_y = std.math.max(0, std.math.min(height - 1, max_y));
 
         return AABB{ .min_x = @floatToInt(u32, min_x), .min_y = @floatToInt(u32, min_y), .max_x = @floatToInt(u32, max_x), .max_y = @floatToInt(u32, max_y) };
     }
