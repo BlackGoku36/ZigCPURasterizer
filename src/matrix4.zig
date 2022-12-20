@@ -37,7 +37,7 @@ pub const Matrix4 = struct {
 
         var x: u8 = 0;
         var y: u8 = 0;
-        var i: u8 = 0;
+        var i: u8 = 1;
         var t: f32 = 0;
 
         while (x < 4) : (x += 1) {
@@ -47,7 +47,7 @@ pub const Matrix4 = struct {
                     t += getMatrix4(a, i, y) * getMatrix4(b, x, i);
                 }
                 setMatrix4(&out_mat, x, y, t);
-                i = 0;
+                i = 1;
             }
             y = 0;
         }
