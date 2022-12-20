@@ -20,13 +20,6 @@ export fn init() void {
     rasterizer.init() catch |err| {
         std.debug.print("error: {any}", .{err});
     };
-    const time_0 = std.time.milliTimestamp();
-    rasterizer.render() catch |err| {
-        std.debug.print("error: {any}", .{err});
-    };
-    const time_1 = std.time.milliTimestamp();
-    const interval = time_1 - time_0;
-    std.debug.print("ms: {d}", .{interval});
 
     sg.setup(.{ .context = sgapp.context() });
 
@@ -36,15 +29,15 @@ export fn init() void {
         .width = rasterizer.width,
         .height = rasterizer.height,
         .pixel_format = sg.PixelFormat.RGBA16F,
+        .usage = .STREAM,
     };
-    fb_img_desc.data.subimage[0][0] = sg.asRange(rasterizer.frame_buffer.buffer);
 
     var db_img_desc: sg.ImageDesc = .{
         .width = rasterizer.width,
         .height = rasterizer.height,
         .pixel_format = sg.PixelFormat.R16F,
+        .usage = .STREAM,
     };
-    db_img_desc.data.subimage[0][0] = sg.asRange(rasterizer.depth_buffer.buffer);
 
     state.bind.vertex_buffers[0] = quad_vbuf;
     state.bind.fs_images[shd.SLOT_tex] = sg.makeImage(fb_img_desc);
@@ -67,7 +60,26 @@ export fn init() void {
     state.pass_action.colors[0] = .{ .action = .CLEAR, .value = .{ .r = 0, .g = 0, .b = 0, .a = 1 } };
 }
 
+var theta: f32 = 0.0;
+
 export fn frame() void {
+
+    const time_0 = std.time.milliTimestamp();
+    rasterizer.render(theta) catch |err| {
+        std.debug.print("error: {any}", .{err});
+    };
+    const time_1 = std.time.milliTimestamp();
+    const interval = time_1 - time_0;
+    std.debug.print("ms: {d}\n", .{interval});
+
+    var fb_image_data: sg.ImageData = .{};
+    fb_image_data.subimage[0][0] = sg.asRange(rasterizer.frame_buffer.buffer);
+    sg.updateImage(state.bind.fs_images[shd.SLOT_tex], fb_image_data);
+
+    var db_image_data: sg.ImageData = .{};
+    db_image_data.subimage[0][0] = sg.asRange(rasterizer.depth_buffer.buffer);
+    sg.updateImage(state.dbg_bind.fs_images[shd.SLOT_tex], db_image_data);
+
     sg.beginDefaultPass(state.pass_action, sapp.width(), sapp.height());
     sg.applyPipeline(state.pip);
     sg.applyBindings(state.bind);
@@ -80,6 +92,8 @@ export fn frame() void {
 
     sg.endPass();
     sg.commit();
+
+    theta+=0.06;
 }
 
 export fn cleanup() void {

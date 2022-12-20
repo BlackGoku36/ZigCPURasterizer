@@ -85,7 +85,7 @@ pub fn init() !void {
     tex_height_f32 = @intToFloat(f32, texture.height);
 }
 
-pub fn render() !void {
+pub fn render(theta: f32) !void {
     frame_buffer.clearColor(1.0);
     depth_buffer.clearColor(1.0);
 
@@ -100,7 +100,9 @@ pub fn render() !void {
 
     var projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 1.0, 10.0);
     var view_mat = Matrix4.lookAt(from, to, up);
-    var view_projection_mat = Matrix4.multMatrix4(projection_mat, view_mat);
+    var model_mat = Matrix4.rotateY(theta);
+    var model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
+    var model_view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
 
     var i: u32 = 0;
     while (i < mesh.indices.items.len) : (i += 3) {
@@ -112,9 +114,9 @@ pub fn render() !void {
         var vert2 = mesh.vertices.items[index2 - 1];
         var vert3 = mesh.vertices.items[index3 - 1];
 
-        var a = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert1), width, height);
-        var b = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert2), width, height);
-        var c = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert3), width, height);
+        var a = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert1), width, height);
+        var b = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert2), width, height);
+        var c = Vec3.ndlToRaster(Matrix4.multVec3(model_view_projection_mat, vert3), width, height);
 
         var a_uv = mesh.uvs.items[mesh.uv_indices.items[i + 0] - 1];
         a_uv.x *= a.z;

@@ -137,4 +137,8 @@ pub const Matrix4 = struct {
         var out_mat = Matrix4{ .mat = mat };
         return out_mat;
     }
+
+    pub fn print(self: Matrix4) void {
+        std.debug.print("Mat4: {any}\n\n", .{self});
+    }
 };
