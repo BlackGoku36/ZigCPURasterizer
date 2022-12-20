@@ -111,11 +111,11 @@ pub fn render(theta: f32) !void {
         var index2 = mesh.indices.items[i + 1];
         var index3 = mesh.indices.items[i + 2];
 
-        var vert1 = mesh.vertices.items[index1 - 1];
-        var vert2 = mesh.vertices.items[index2 - 1];
-        var vert3 = mesh.vertices.items[index3 - 1];
+        var vert1 = mesh.vertices.items[index1];
+        var vert2 = mesh.vertices.items[index2];
+        var vert3 = mesh.vertices.items[index3];
 
-        var normal =  Matrix4.multVec3(Matrix4.rotateY(theta), mesh.normals.items[mesh.normal_indices.items[i + 0] - 1]);
+        var normal = Matrix4.multVec3(Matrix4.rotateY(theta), mesh.normals.items[mesh.normal_indices.items[i + 0]]);
 
         var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
         var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
@@ -124,13 +124,13 @@ pub fn render(theta: f32) !void {
         var b = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert2), width, height);
         var c = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert3), width, height);
 
-        var a_uv = mesh.uvs.items[mesh.uv_indices.items[i + 0] - 1];
+        var a_uv = mesh.uvs.items[mesh.uv_indices.items[i + 0]];
         a_uv.x *= a.z;
         a_uv.y *= a.z;
-        var b_uv = mesh.uvs.items[mesh.uv_indices.items[i + 1] - 1];
+        var b_uv = mesh.uvs.items[mesh.uv_indices.items[i + 1]];
         b_uv.x *= b.z;
         b_uv.y *= b.z;
-        var c_uv = mesh.uvs.items[mesh.uv_indices.items[i + 2] - 1];
+        var c_uv = mesh.uvs.items[mesh.uv_indices.items[i + 2]];
         c_uv.x *= c.z;
         c_uv.y *= c.z;
 

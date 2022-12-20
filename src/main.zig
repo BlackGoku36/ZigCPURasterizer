@@ -63,7 +63,6 @@ export fn init() void {
 var theta: f32 = 0.0;
 
 export fn frame() void {
-
     const time_0 = std.time.milliTimestamp();
     rasterizer.render(theta) catch |err| {
         std.debug.print("error: {any}", .{err});
@@ -93,7 +92,7 @@ export fn frame() void {
     sg.endPass();
     sg.commit();
 
-    theta+=0.06;
+    theta += 0.06;
 }
 
 export fn cleanup() void {

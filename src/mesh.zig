@@ -59,16 +59,16 @@ pub const Mesh = struct {
     fn parseFaceElement(face: []const u8, idx: *std.ArrayList(u32), uv_idx: *std.ArrayList(u32), normal_idx: *std.ArrayList(u32)) !void {
         var elems = std.mem.tokenize(u8, face, "/");
         var index = try std.fmt.parseInt(u32, elems.next().?, 10);
-        try idx.append(index);
+        try idx.append(index - 1);
 
         if (elems.next()) |uv| {
             var uv_index = try std.fmt.parseInt(u32, uv, 10);
-            try uv_idx.append(uv_index);
+            try uv_idx.append(uv_index - 1);
         }
 
         if (elems.next()) |norm| {
             var normal_index = try std.fmt.parseInt(u32, norm, 10);
-            try normal_idx.append(normal_index);
+            try normal_idx.append(normal_index - 1);
         }
     }
 
