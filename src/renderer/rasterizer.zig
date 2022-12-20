@@ -144,9 +144,9 @@ pub fn render(theta: f32) !void {
 
                 var area = edgeFunction(a, b, c.x, c.y);
 
-                var x: u32 = aabb.min_x;
                 var y: u32 = aabb.min_y;
                 while (y <= aabb.max_y) : (y += 1) {
+                    var x: u32 = aabb.min_x;
                     while (x <= aabb.max_x) : (x += 1) {
                         const xf32 = @intToFloat(f32, x);
                         const yf32 = @intToFloat(f32, y);
@@ -190,7 +190,6 @@ pub fn render(theta: f32) !void {
                             }
                         }
                     }
-                    x = 0;
                 }
             }
         }
