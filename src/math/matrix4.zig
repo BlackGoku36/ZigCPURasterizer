@@ -133,7 +133,10 @@ pub const Matrix4 = struct {
     }
 
     pub fn rotateY(theta: f32) Matrix4 {
-        var mat = [4 * 4]f32{ @cos(theta), 0, @sin(theta), 0, 0, 1, 0, 0, -@sin(theta), 0, @cos(theta), 0, 0, 0, 0, 1 };
+        var ct = @cos(theta);
+        var st = @sin(theta);
+
+        var mat = [4 * 4]f32{ ct, 0, st, 0, 0, 1, 0, 0, -st, 0, ct, 0, 0, 0, 0, 1 };
         var out_mat = Matrix4{ .mat = mat };
         return out_mat;
     }
