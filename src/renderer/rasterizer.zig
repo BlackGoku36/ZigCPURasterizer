@@ -173,14 +173,6 @@ pub fn render(theta: f32) !void {
                     var w_x2: f32 = w_y2;
 
                     while (x <= aabb.max_x) : (x += 1) {
-
-                        // const xf32 = @intToFloat(f32, x);
-                        // const yf32 = @intToFloat(f32, y);
-
-                        // var w_x0: f32 = edgeFunction(a, b, xf32, yf32);
-                        // var w_x1: f32 = edgeFunction(b, c, xf32, yf32);
-                        // var w_x2: f32 = edgeFunction(c, a, xf32, yf32);
-
                         if (windingOrderTest(winding_order, w_x0, w_x1, w_x2)) {
                             var area0 = w_x0 / area;
                             var area1 = w_x1 / area;
@@ -191,8 +183,8 @@ pub fn render(theta: f32) !void {
                             if (z < depth_buffer.getPixel(x, y)) {
                                 depth_buffer.putPixel(x, y, @floatCast(f16, z));
 
-                                var u = w_x1 * a_uv.x + w_x2 * b_uv.x + w_x0 * c_uv.x;
-                                var v = w_x1 * a_uv.y + w_x2 * b_uv.y + w_x0 * c_uv.y;
+                                var u = area1 * a_uv.x + area2 * b_uv.x + area0 * c_uv.x;
+                                var v = area1 * a_uv.y + area2 * b_uv.y + area0 * c_uv.y;
 
                                 u *= z;
                                 v *= z;
