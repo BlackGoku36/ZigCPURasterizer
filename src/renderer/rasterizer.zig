@@ -100,6 +100,10 @@ pub fn init() !void {
     tex_height_f32 = @intToFloat(f32, texture.height);
 }
 
+// http://acta.uni-obuda.hu/Mileff_Nehez_Dudra_63.pdf
+// https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/
+// https://www.cs.drexel.edu/~david/Classes/Papers/comp175-06-pineda.pdf
+
 pub fn render(theta: f32) !void {
     frame_buffer.clearColor(1.0);
     depth_buffer.clearColor(1.0);
@@ -145,29 +149,50 @@ pub fn render(theta: f32) !void {
 
                 var area = edgeFunction(a, b, c.x, c.y);
 
+                const xf32 = @intToFloat(f32, aabb.min_x);
+                const yf32 = @intToFloat(f32, aabb.min_y);
+
+                var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
+                var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
+                var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
+
+                var dy0 = (b.y - a.y);
+                var dy1 = (c.y - b.y);
+                var dy2 = (a.y - c.y);
+
+                var dx0 = (a.x - b.x);
+                var dx1 = (b.x - c.x);
+                var dx2 = (c.x - a.x);
+
                 var y: u32 = aabb.min_y;
                 while (y <= aabb.max_y) : (y += 1) {
                     var x: u32 = aabb.min_x;
+
+                    var w_x0: f32 = w_y0;
+                    var w_x1: f32 = w_y1;
+                    var w_x2: f32 = w_y2;
+
                     while (x <= aabb.max_x) : (x += 1) {
-                        const xf32 = @intToFloat(f32, x);
-                        const yf32 = @intToFloat(f32, y);
 
-                        var w0: f32 = edgeFunction(a, b, xf32, yf32);
-                        var w1: f32 = edgeFunction(b, c, xf32, yf32);
-                        var w2: f32 = edgeFunction(c, a, xf32, yf32);
+                        // const xf32 = @intToFloat(f32, x);
+                        // const yf32 = @intToFloat(f32, y);
 
-                        if (windingOrderTest(winding_order, w0, w1, w2)) {
-                            w0 /= area;
-                            w1 /= area;
-                            w2 /= area;
+                        // var w_x0: f32 = edgeFunction(a, b, xf32, yf32);
+                        // var w_x1: f32 = edgeFunction(b, c, xf32, yf32);
+                        // var w_x2: f32 = edgeFunction(c, a, xf32, yf32);
 
-                            var z = 1.0 / (w1 * a.z + w2 * b.z + w0 * c.z);
+                        if (windingOrderTest(winding_order, w_x0, w_x1, w_x2)) {
+                            var area0 = w_x0 / area;
+                            var area1 = w_x1 / area;
+                            var area2 = w_x2 / area;
+
+                            var z = 1.0 / (area1 * a.z + area2 * b.z + area0 * c.z);
 
                             if (z < depth_buffer.getPixel(x, y)) {
                                 depth_buffer.putPixel(x, y, @floatCast(f16, z));
 
-                                var u = w1 * a_uv.x + w2 * b_uv.x + w0 * c_uv.x;
-                                var v = w1 * a_uv.y + w2 * b_uv.y + w0 * c_uv.y;
+                                var u = w_x1 * a_uv.x + w_x2 * b_uv.x + w_x0 * c_uv.x;
+                                var v = w_x1 * a_uv.y + w_x2 * b_uv.y + w_x0 * c_uv.y;
 
                                 u *= z;
                                 v *= z;
@@ -190,7 +215,13 @@ pub fn render(theta: f32) !void {
                                 frame_buffer.putPixel(x, y, Color{ .r = @floatCast(f16, albedo.r), .g = @floatCast(f16, albedo.g), .b = @floatCast(f16, albedo.b) });
                             }
                         }
+                        w_x0 += dy0;
+                        w_x1 += dy1;
+                        w_x2 += dy2;
                     }
+                    w_y0 += dx0;
+                    w_y1 += dx1;
+                    w_y2 += dx2;
                 }
             }
         }
