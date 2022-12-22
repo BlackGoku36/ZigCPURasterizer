@@ -14,6 +14,7 @@ f.close()
 
 print(sum/count)
 
+# Loop traversal optimization
 # 6.42
 # 5.36
 
@@ -22,3 +23,16 @@ print(sum/count)
 
 # 8.435
 # 7.175
+
+# obj's elements optimization
+
+# dragon
+# before: 64.965
+# after (SOA): 57.57, 56.175, 57.1 (56.9 avg)
+# after (AOS): 59.585
+# after (AOSOA): 58.17
+
+# spot
+# before: 7.515
+# after (SOA): 7.32
+# after (AOSOA): 7.5

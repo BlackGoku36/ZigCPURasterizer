@@ -1,5 +1,6 @@
 const std = @import("std");
 const zigimg = @import("zigimg");
+const obj = @import("zig-obj");
 
 const Vec3 = @import("../math/vec3.zig").Vec3;
 const Vec2 = @import("../math/vec2.zig").Vec2;
@@ -114,16 +115,12 @@ pub fn render(theta: f32) !void {
     var view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
 
     var i: u32 = 0;
-    while (i < mesh.indices.items.len) : (i += 3) {
-        var index1 = mesh.indices.items[i];
-        var index2 = mesh.indices.items[i + 1];
-        var index3 = mesh.indices.items[i + 2];
+    while (i < mesh.indices) : (i += 3) {
+        var vert1 = mesh.vertices.items[i];
+        var vert2 = mesh.vertices.items[i + 1];
+        var vert3 = mesh.vertices.items[i + 2];
 
-        var vert1 = mesh.vertices.items[index1];
-        var vert2 = mesh.vertices.items[index2];
-        var vert3 = mesh.vertices.items[index3];
-
-        var normal = Vec3.normalize(Matrix4.multVec3(model_mat, mesh.normals.items[mesh.normal_indices.items[i + 0]]));
+        var normal = Vec3.normalize(Matrix4.multVec3(model_mat, mesh.normals.items[i]));
 
         if (Vec3.dot(normal, Vec3.normalize(Vec3.sub(from, vert1))) > -0.25) {
             var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
@@ -133,13 +130,13 @@ pub fn render(theta: f32) !void {
             var b = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert2), width, height);
             var c = Vec3.ndlToRaster(Matrix4.multVec3(view_projection_mat, vert3), width, height);
 
-            var a_uv = mesh.uvs.items[mesh.uv_indices.items[i + 0]];
+            var a_uv = mesh.uvs.items[i];
             a_uv.x *= a.z;
             a_uv.y *= a.z;
-            var b_uv = mesh.uvs.items[mesh.uv_indices.items[i + 1]];
+            var b_uv = mesh.uvs.items[i + 1];
             b_uv.x *= b.z;
             b_uv.y *= b.z;
-            var c_uv = mesh.uvs.items[mesh.uv_indices.items[i + 2]];
+            var c_uv = mesh.uvs.items[i + 2];
             c_uv.x *= c.z;
             c_uv.y *= c.z;
 
