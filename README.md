@@ -4,7 +4,7 @@ Checkout `Computer Graphics from Scratch` section on: https://blackgoku36.github
 
 If I remember correctly, I got spot model from: https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/
 
-## BUILD INSRTUCTIONS
+## Build Instructions
 
 Requirements:
 - The submodules
