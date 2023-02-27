@@ -12,6 +12,9 @@ Just do:
 zig build run -Drelease-fast
 ```
 
+You should get:
+![screenshot](screenshot.png)
+
 Some refs:
 
 - https://www.scratchapixel.com/ (Huge thanks)
