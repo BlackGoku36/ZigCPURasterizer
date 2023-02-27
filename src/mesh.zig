@@ -28,7 +28,13 @@ pub const Mesh = struct {
         var normal_indices = std.ArrayList(u32).init(allocator);
         defer normal_indices.deinit();
 
-        var file = try std.fs.cwd().openFile(fileName, .{});
+        var file: std.fs.File = undefined;
+
+        if (std.fs.cwd().openFile(fileName, .{})) |f| {
+            file = f;
+        } else |err| {
+            std.debug.print("File not found: {any}\n", .{err});
+        }
         defer file.close();
 
         var buf_reader = std.io.bufferedReader(file.reader());
@@ -36,30 +42,31 @@ pub const Mesh = struct {
 
         var buf: [1024]u8 = undefined;
         while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-            var words = std.mem.tokenize(u8, line, " ");
+            var words = std.mem.tokenize(u8, std.mem.trim(u8, line, "\r"), " ");
 
-            var elem_type = words.next().?;
-            if (std.mem.eql(u8, elem_type, "v")) {
-                var x = try std.fmt.parseFloat(f32, words.next().?);
-                var y = try std.fmt.parseFloat(f32, words.next().?);
-                var z = try std.fmt.parseFloat(f32, words.next().?);
+            if (words.next()) |elem_type| {
+                if (std.mem.eql(u8, elem_type, "v")) {
+                    var x = try std.fmt.parseFloat(f32, words.next().?);
+                    var y = try std.fmt.parseFloat(f32, words.next().?);
+                    var z = try std.fmt.parseFloat(f32, words.next().?);
 
-                try temp_vert.append(Vec3{ .x = x, .y = y, .z = z });
-            } else if (std.mem.eql(u8, elem_type, "vt")) {
-                var u = try std.fmt.parseFloat(f32, words.next().?);
-                var v = try std.fmt.parseFloat(f32, words.next().?);
+                    try temp_vert.append(Vec3{ .x = x, .y = y, .z = z });
+                } else if (std.mem.eql(u8, elem_type, "vt")) {
+                    var u = try std.fmt.parseFloat(f32, words.next().?);
+                    var v = try std.fmt.parseFloat(f32, words.next().?);
 
-                try temp_uv.append(Vec2{ .x = u, .y = v });
-            } else if (std.mem.eql(u8, elem_type, "vn")) {
-                var x = try std.fmt.parseFloat(f32, words.next().?);
-                var y = try std.fmt.parseFloat(f32, words.next().?);
-                var z = try std.fmt.parseFloat(f32, words.next().?);
+                    try temp_uv.append(Vec2{ .x = u, .y = v });
+                } else if (std.mem.eql(u8, elem_type, "vn")) {
+                    var x = try std.fmt.parseFloat(f32, words.next().?);
+                    var y = try std.fmt.parseFloat(f32, words.next().?);
+                    var z = try std.fmt.parseFloat(f32, words.next().?);
 
-                try temp_norm.append(Vec3{ .x = x, .y = y, .z = z });
-            } else if (std.mem.eql(u8, elem_type, "f")) {
-                try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
-                try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
-                try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
+                    try temp_norm.append(Vec3{ .x = x, .y = y, .z = z });
+                } else if (std.mem.eql(u8, elem_type, "f")) {
+                    try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
+                    try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
+                    try parseFaceElement(words.next().?, &idx, &uv_indices, &normal_indices);
+                }
             }
         }
 
