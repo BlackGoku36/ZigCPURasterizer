@@ -6,6 +6,10 @@ If I remember correctly, I got spot model from: https://www.cs.cmu.edu/~kmcrane/
 
 ## BUILD INSRTUCTIONS
 
+Requirements:
+- The submodules
+- Sokol-shdc bin from [here](https://github.com/floooh/sokol-tools-bin), and set ENV var to it. (to compile sokol side shader, in case you just want to run, you can comment out `line 15` from `build.zig` as the shader is already compiled).
+
 Just do:
 
 ```
