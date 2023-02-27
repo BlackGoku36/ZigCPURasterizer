@@ -82,8 +82,8 @@ const view_mat = Matrix4.lookAt(from, to, up);
 pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
-    mesh = try Mesh.fromObjFile("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/untitled.obj", allocator);
-    albedo_tex = try zigimg.Image.fromFilePath(allocator, "../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet_BaseColor.png");
+    mesh = try Mesh.fromObjFile("spot_mesh.obj", allocator);
+    albedo_tex = try zigimg.Image.fromFilePath(allocator, "spot_texture.png");
     tex_width_f32 = @intToFloat(f32, albedo_tex.width);
     tex_height_f32 = @intToFloat(f32, albedo_tex.height);
 }
@@ -182,13 +182,13 @@ pub fn render(theta: f32) !void {
                                 var tex_u = @floatToInt(u32, u * tex_width_f32);
                                 var tex_v = @floatToInt(u32, v * tex_height_f32);
 
-                                var albedo = albedo_tex.pixels.rgba32[tex_v * albedo_tex.width + tex_u].toColorf32();
+                                var albedo = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].toColorf32();
 
                                 var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
 
-                                albedo.r *= pong * 1.5;
-                                albedo.g *= pong * 1.5;
-                                albedo.b *= pong * 1.5;
+                                albedo.r *= pong;
+                                albedo.g *= pong;
+                                albedo.b *= pong;
 
                                 frame_buffer.putPixel(x, y, Color{ .r = @floatCast(f16, albedo.r), .g = @floatCast(f16, albedo.g), .b = @floatCast(f16, albedo.b) });
                             }
