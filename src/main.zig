@@ -95,15 +95,23 @@ export fn init() void {
     state.pass_action.colors[0] = .{ .load_action = sg.LoadAction.CLEAR, .clear_value = .{ .r = 0, .g = 0, .b = 0, .a = 1 } };
 }
 
-var theta: f32 = 0.0;
+var time_accum: i64 = 0;
+const to_rad = std.math.pi / 180.0;
 
 export fn frame() void {
+
+    // We want to rotate the object by 360 in second (despite framerate)
+    // we map millisecond time to range [0.0, 1.0] the convert it to range in degrees
+    const normalized_time = @as(f32, @floatFromInt(@mod(time_accum, 1000))) / 1000.0;
+    const theta = normalized_time * (360 * to_rad);
+
     const time_0 = std.time.milliTimestamp();
     rasterizer.render(theta) catch |err| {
         std.debug.print("error: {any}", .{err});
     };
     const time_1 = std.time.milliTimestamp();
     const interval = time_1 - time_0;
+    time_accum += interval;
     std.debug.print("ms: {d}\n", .{interval});
 
     var fb_image_data: sg.ImageData = .{};
@@ -126,8 +134,6 @@ export fn frame() void {
 
     sg.endPass();
     sg.commit();
-
-    theta += 0.06;
 }
 
 export fn cleanup() void {
