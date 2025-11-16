@@ -60,7 +60,7 @@ pub const Matrix4 = struct {
         out_vec.x = vec.x * mat.mat[0] + vec.y * mat.mat[1] + vec.z * mat.mat[2] + mat.mat[3];
         out_vec.y = vec.x * mat.mat[4] + vec.y * mat.mat[5] + vec.z * mat.mat[6] + mat.mat[7];
         out_vec.z = vec.x * mat.mat[8] + vec.y * mat.mat[9] + vec.z * mat.mat[10] + mat.mat[11];
-        var w: f32 = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
+        const w: f32 = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
 
         if (w != 1.0) {
             out_vec.x /= w;
@@ -73,9 +73,9 @@ pub const Matrix4 = struct {
     pub fn lookAt(from: Vec3, to: Vec3, up: Vec3) Matrix4 {
         var out_mat: Matrix4 = comptime getZero();
 
-        var forward: Vec3 = Vec3.normalize(Vec3.sub(to, from));
-        var right: Vec3 = Vec3.normalize(Vec3.cross(forward, up));
-        var new_up: Vec3 = Vec3.cross(right, forward);
+        const forward: Vec3 = Vec3.normalize(Vec3.sub(to, from));
+        const right: Vec3 = Vec3.normalize(Vec3.cross(forward, up));
+        const new_up: Vec3 = Vec3.cross(right, forward);
         out_mat.mat[0] = right.x;
         out_mat.mat[1] = right.y;
         out_mat.mat[2] = right.z;
@@ -96,8 +96,8 @@ pub const Matrix4 = struct {
     pub fn perspectiveProjection(fov: f32, aspect: f32, near: f32, far: f32) Matrix4 {
         var out_mat: Matrix4 = comptime getZero();
 
-        var scale_height: f32 = 1.0 / @tan(fov / 2.0);
-        var scale_width: f32 = scale_height / aspect;
+        const scale_height: f32 = 1.0 / @tan(fov / 2.0);
+        const scale_width: f32 = scale_height / aspect;
 
         out_mat.mat[0] = scale_width;
         out_mat.mat[5] = scale_height;
@@ -111,12 +111,12 @@ pub const Matrix4 = struct {
     pub fn orthogonalProjection(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Matrix4 {
         var out_mat: Matrix4 = comptime getZero();
 
-        var rl = right - left;
-        var tb = top - bottom;
-        var f_n = far - near;
-        var tx = -(right + left) / (rl);
-        var ty = -(top + bottom) / (tb);
-        var tz = -(far + near) / (f_n);
+        const rl = right - left;
+        const tb = top - bottom;
+        const f_n = far - near;
+        const tx = -(right + left) / (rl);
+        const ty = -(top + bottom) / (tb);
+        const tz = -(far + near) / (f_n);
 
         out_mat.mat[0] = 2 / rl;
         out_mat.mat[3] = tx;
@@ -132,8 +132,8 @@ pub const Matrix4 = struct {
     pub fn rotateY(theta: f32) Matrix4 {
         var out_mat: Matrix4 = comptime getZero();
 
-        var ct = @cos(theta);
-        var st = @sin(theta);
+        const ct = @cos(theta);
+        const st = @sin(theta);
 
         out_mat.mat[0] = ct;
         out_mat.mat[2] = st;

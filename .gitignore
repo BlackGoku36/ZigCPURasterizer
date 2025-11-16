@@ -3,3 +3,4 @@ zig-*/
 dragon.obj
 buddha.obj
 some_models
+.zig-cache

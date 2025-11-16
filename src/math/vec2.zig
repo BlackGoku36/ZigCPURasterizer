@@ -32,9 +32,9 @@ pub const Vec2 = struct {
     }
 
     pub fn normalize(a: Vec2) Vec2 {
-        var len: f32 = a.getLength();
+        const len: f32 = a.getLength();
         if (len > 0) {
-            var inv: f32 = 1.0 / len;
+            const inv: f32 = 1.0 / len;
             a.x = a.x * inv;
             a.y = a.y * inv;
         }
@@ -43,8 +43,8 @@ pub const Vec2 = struct {
 
     pub fn fromU32(x: u32, y: u32) Vec2 {
         return Vec2{
-            .x = @intToFloat(f32, x),
-            .y = @intToFloat(f32, y),
+            .x = @floatFromInt(x),
+            .y = @floatFromInt(y),
         };
     }
 };

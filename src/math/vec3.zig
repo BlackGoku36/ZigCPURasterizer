@@ -46,9 +46,9 @@ pub const Vec3 = struct {
     pub fn normalize(a: Vec3) Vec3 {
         var out: Vec3 = Vec3{};
 
-        var len: f32 = a.getLength();
+        const len: f32 = a.getLength();
         if (len > 0) {
-            var inv: f32 = 1.0 / len;
+            const inv: f32 = 1.0 / len;
             out.x = a.x * inv;
             out.y = a.y * inv;
             out.z = a.z * inv;

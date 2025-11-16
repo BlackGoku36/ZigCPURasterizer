@@ -13,18 +13,18 @@ void main() {
 /* quad fragment shader */
 @fs fs
 
-uniform sampler2D tex;
+layout(binding=0) uniform texture2D tex;
+layout(binding=0) uniform sampler smp;
 
 in vec2 uv;
 
 out vec4 frag_color;
 
 void main() {
-    vec3 col = texture(tex, uv).xyz;
+    vec3 col = texture(sampler2D(tex, smp), uv).xyz;
     frag_color = vec4(col, 1.0);
 }
 @end
 
 /* quad shader program */
 @program shader vs fs
-

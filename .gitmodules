@@ -1,6 +1,0 @@
-[submodule "libs/sokol-zig"]
-	path = libs/sokol-zig
-	url = https://github.com/floooh/sokol-zig.git
-[submodule "libs/zigimg"]
-	path = libs/zigimg
-	url = https://github.com/zigimg/zigimg.git

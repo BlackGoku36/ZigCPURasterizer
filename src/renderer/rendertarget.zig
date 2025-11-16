@@ -39,7 +39,7 @@ pub const RenderTargetR16 = struct {
     }
 
     pub fn clearColor(self: *RenderTargetR16, value: f16) void {
-        std.mem.set(f16, self.buffer, value);
+        @memset(self.buffer, value);
     }
 };
 
@@ -77,6 +77,6 @@ pub const RenderTargetRGBA16 = struct {
     }
 
     pub fn clearColor(self: *RenderTargetRGBA16, value: f16) void {
-        std.mem.set(f16, self.buffer, value);
+        @memset(self.buffer, value);
     }
 };

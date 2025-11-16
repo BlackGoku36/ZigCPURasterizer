@@ -1,17 +1,25 @@
 const std = @import("std");
 const sokol = @import("sokol");
+// const sokol = @import("sokol");
+const slog = sokol.log;
+// const sg = sokol.gfx;
+// const sapp = sokol.app;
+const sglue = sokol.glue;
 
 const sg = sokol.gfx;
 const sapp = sokol.app;
 const sgapp = sokol.app_gfx_glue;
 
-const shd = @import("shaders/shader.glsl.zig");
+const shd = @import("shader");
 const rasterizer = @import("renderer/rasterizer.zig");
 
 const state = struct {
     var bind: sg.Bindings = .{};
     var pip: sg.Pipeline = .{};
     var pass_action: sg.PassAction = .{};
+
+    var fb_image: sg.Image = .{};
+    var db_image: sg.Image = .{};
 
     var dbg_pip: sg.Pipeline = .{};
     var dbg_bind: sg.Bindings = .{};
@@ -22,43 +30,73 @@ export fn init() void {
         std.debug.print("error: {any}", .{err});
     };
 
-    sg.setup(.{ .context = sgapp.context() });
+    // sg.setup(.{ .context = sgapp.context() });
+    sg.setup(.{
+            .environment = sglue.environment(),
+            .logger = .{ .func = slog.func },
+        });
 
     const quad_vbuf = sg.makeBuffer(.{ .data = sg.asRange(&[_]f32{ 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0 }) });
 
-    var fb_img_desc: sg.ImageDesc = .{
+    const fb_img_desc: sg.ImageDesc = .{
         .width = rasterizer.width,
         .height = rasterizer.height,
         .pixel_format = sg.PixelFormat.RGBA16F,
-        .usage = .STREAM,
+        .usage = .{ .stream_update = true },
     };
 
-    var db_img_desc: sg.ImageDesc = .{
+    const db_img_desc: sg.ImageDesc = .{
         .width = rasterizer.width,
         .height = rasterizer.height,
         .pixel_format = sg.PixelFormat.R16F,
-        .usage = .STREAM,
+        .usage = .{ .stream_update = true },
     };
 
     state.bind.vertex_buffers[0] = quad_vbuf;
-    state.bind.fs_images[shd.SLOT_tex] = sg.makeImage(fb_img_desc);
+
+    state.fb_image = sg.makeImage(fb_img_desc);
+    state.db_image = sg.makeImage(db_img_desc);
+
+    const sampler = sg.makeSampler(.{
+            .min_filter = sg.Filter.LINEAR,
+            .mag_filter = sg.Filter.LINEAR,
+            .wrap_u = sg.Wrap.CLAMP_TO_EDGE,
+            .wrap_v = sg.Wrap.CLAMP_TO_EDGE,
+            .label = "png-sampler",
+        });
+
+    state.bind.samplers[shd.SMP_smp] = sampler;
+    state.dbg_bind.samplers[shd.SMP_smp] = sampler;
+
+    state.bind.views[shd.VIEW_tex] = sg.makeView(.{
+    	.texture = .{
+    		.image = state.fb_image,
+    	},
+    });
+
+    const shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend()));
+
     var pip_desc: sg.PipelineDesc = .{
         .primitive_type = .TRIANGLE_STRIP,
-        .shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend())),
+        .shader = shader,
     };
-    pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT2;
+    pip_desc.layout.attrs[shd.ATTR_shader_position].format = .FLOAT2;
     state.pip = sg.makePipeline(pip_desc);
 
     state.dbg_bind.vertex_buffers[0] = quad_vbuf;
-    state.dbg_bind.fs_images[shd.SLOT_tex] = sg.makeImage(db_img_desc);
+    state.dbg_bind.views[shd.VIEW_tex] = sg.makeView(.{
+    	.texture = .{
+     		.image = state.db_image,
+     	},
+    });
     var dbg_pip_desc: sg.PipelineDesc = .{
         .primitive_type = .TRIANGLE_STRIP,
-        .shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend())),
+        .shader = shader,
     };
-    dbg_pip_desc.layout.attrs[shd.ATTR_vs_position].format = .FLOAT2;
+    dbg_pip_desc.layout.attrs[shd.ATTR_shader_position].format = .FLOAT2;
     state.dbg_pip = sg.makePipeline(dbg_pip_desc);
 
-    state.pass_action.colors[0] = .{ .action = .CLEAR, .value = .{ .r = 0, .g = 0, .b = 0, .a = 1 } };
+    state.pass_action.colors[0] = .{ .load_action = sg.LoadAction.CLEAR, .clear_value = .{ .r = 0, .g = 0, .b = 0, .a = 1 } };
 }
 
 var theta: f32 = 0.0;
@@ -73,14 +111,15 @@ export fn frame() void {
     std.debug.print("ms: {d}\n", .{interval});
 
     var fb_image_data: sg.ImageData = .{};
-    fb_image_data.subimage[0][0] = sg.asRange(rasterizer.frame_buffer.buffer);
-    sg.updateImage(state.bind.fs_images[shd.SLOT_tex], fb_image_data);
+    fb_image_data.mip_levels[0] = sg.asRange(rasterizer.frame_buffer.buffer);
+    sg.updateImage(state.fb_image, fb_image_data);
 
     var db_image_data: sg.ImageData = .{};
-    db_image_data.subimage[0][0] = sg.asRange(rasterizer.depth_buffer.buffer);
-    sg.updateImage(state.dbg_bind.fs_images[shd.SLOT_tex], db_image_data);
+    db_image_data.mip_levels[0] = sg.asRange(rasterizer.depth_buffer.buffer);
+    sg.updateImage(state.db_image, db_image_data);
 
-    sg.beginDefaultPass(state.pass_action, sapp.width(), sapp.height());
+    // sg.beginDefaultPass(state.pass_action, sapp.width(), sapp.height());
+    sg.beginPass(.{.action = state.pass_action, .swapchain = sglue.swapchain()});
     sg.applyPipeline(state.pip);
     sg.applyBindings(state.bind);
     sg.draw(0, 4, 1);

@@ -24,21 +24,25 @@ const AABB = struct {
     max_y: u32,
 
     fn getFrom(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) ?AABB {
-        var min_x = std.math.min3(ax, bx, cx);
-        var min_y = std.math.min3(ay, by, cy);
+        // var min_x = std.math.min3(ax, bx, cx);
+        // var min_y = std.math.min3(ay, by, cy);
+        var min_x = @min(ax, bx, cx);
+        var min_y = @min(ay, by, cy);
 
-        var max_x = std.math.max3(ax, bx, cx);
-        var max_y = std.math.max3(ay, by, cy);
+        // var max_x = std.math.max3(ax, bx, cx);
+        // var max_y = std.math.max3(ay, by, cy);
+        var max_x = @max(ax, bx, cx);
+        var max_y = @max(ay, by, cy);
 
         if (min_x > width - 1 or max_x < 0 or min_y > height - 1 or max_y < 0) {
             return null;
         } else {
-            min_x = std.math.max(0.0, min_x);
-            max_x = std.math.min(width - 1, max_x);
-            min_y = std.math.max(0.0, min_y);
-            max_y = std.math.min(height - 1, max_y);
+            min_x = @max(0.0, min_x);
+            max_x = @min(width - 1, max_x);
+            min_y = @max(0.0, min_y);
+            max_y = @min(height - 1, max_y);
 
-            return AABB{ .min_x = @floatToInt(u32, min_x), .min_y = @floatToInt(u32, min_y), .max_x = @floatToInt(u32, max_x), .max_y = @floatToInt(u32, max_y) };
+            return AABB{ .min_x = @intFromFloat(min_x), .min_y = @intFromFloat(min_y), .max_x = @intFromFloat(max_x), .max_y = @intFromFloat(max_y) };
         }
     }
 };
@@ -61,11 +65,13 @@ pub var frame_buffer: RenderTargetRGBA16 = undefined;
 pub var depth_buffer: RenderTargetR16 = undefined;
 
 var mesh: Mesh = undefined;
+
+var albedo_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
 var albedo_tex: zigimg.Image = undefined;
 
 var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
-const aspect_ratio: f32 = @intToFloat(f32, width) / @intToFloat(f32, height);
+const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(height));
 
 const winding_order = WindingOrder.CCW;
 
@@ -83,42 +89,42 @@ pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
     mesh = try Mesh.fromObjFile("spot_mesh.obj", allocator);
-    albedo_tex = try zigimg.Image.fromFilePath(allocator, "spot_texture.png");
-    tex_width_f32 = @intToFloat(f32, albedo_tex.width);
-    tex_height_f32 = @intToFloat(f32, albedo_tex.height);
+    albedo_tex = try zigimg.Image.fromFilePath(allocator, "spot_texture.png", albedo_read_buffer[0..]);
+    tex_width_f32 = @floatFromInt(albedo_tex.width);
+    tex_height_f32 = @floatFromInt(albedo_tex.height);
 }
 
 pub fn render(theta: f32) !void {
     frame_buffer.clearColor(0.5);
     depth_buffer.clearColor(1.0);
 
-    var model_mat = Matrix4.rotateY(theta);
+    const model_mat = Matrix4.rotateY(theta);
 
-    var model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
-    var view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
+    const model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
+    const view_projection_mat = Matrix4.multMatrix4(projection_mat, model_view_mat);
 
     var i: u32 = 0;
     while (i < mesh.indices) : (i += 3) {
-        var vert1 = mesh.vertices.items[i];
-        var vert2 = mesh.vertices.items[i + 1];
-        var vert3 = mesh.vertices.items[i + 2];
+        const vert1 = mesh.vertices.items[i];
+        const vert2 = mesh.vertices.items[i + 1];
+        const vert3 = mesh.vertices.items[i + 2];
 
-        var a_rot = Matrix4.multVec3(model_mat, vert1);
-        var b_rot = Matrix4.multVec3(model_mat, vert2);
-        var c_rot = Matrix4.multVec3(model_mat, vert3);
+        const a_rot = Matrix4.multVec3(model_mat, vert1);
+        const b_rot = Matrix4.multVec3(model_mat, vert2);
+        const c_rot = Matrix4.multVec3(model_mat, vert3);
 
-        var normal = Vec3.cross(Vec3.sub(b_rot, a_rot), Vec3.sub(c_rot, a_rot)).normalize();
+        const normal = Vec3.cross(Vec3.sub(b_rot, a_rot), Vec3.sub(c_rot, a_rot)).normalize();
 
         if (Vec3.dot(normal, Vec3.normalize(Vec3.sub(from, vert1))) > -0.25) {
-            var proj_vert1 = Matrix4.multVec3(view_projection_mat, vert1);
-            var proj_vert2 = Matrix4.multVec3(view_projection_mat, vert2);
-            var proj_vert3 = Matrix4.multVec3(view_projection_mat, vert3);
+            const proj_vert1 = Matrix4.multVec3(view_projection_mat, vert1);
+            const proj_vert2 = Matrix4.multVec3(view_projection_mat, vert2);
+            const proj_vert3 = Matrix4.multVec3(view_projection_mat, vert3);
 
-            var light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
+            const light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
 
-            var a = Vec3.ndlToRaster(proj_vert1, width, height);
-            var b = Vec3.ndlToRaster(proj_vert2, width, height);
-            var c = Vec3.ndlToRaster(proj_vert3, width, height);
+            const a = Vec3.ndlToRaster(proj_vert1, width, height);
+            const b = Vec3.ndlToRaster(proj_vert2, width, height);
+            const c = Vec3.ndlToRaster(proj_vert3, width, height);
 
             var a_uv = mesh.uvs.items[i];
             a_uv.x *= a.z;
@@ -131,22 +137,22 @@ pub fn render(theta: f32) !void {
             c_uv.y *= c.z;
 
             if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
-                var area = edgeFunction(a, b, c.x, c.y);
+                const area = edgeFunction(a, b, c.x, c.y);
 
-                const xf32 = @intToFloat(f32, aabb.min_x);
-                const yf32 = @intToFloat(f32, aabb.min_y);
+                const xf32 = @as(f32, @floatFromInt(aabb.min_x));
+                const yf32 = @as(f32, @floatFromInt(aabb.min_y));
 
                 var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
                 var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
                 var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
 
-                var dy0 = (b.y - a.y);
-                var dy1 = (c.y - b.y);
-                var dy2 = (a.y - c.y);
+                const dy0 = (b.y - a.y);
+                const dy1 = (c.y - b.y);
+                const dy2 = (a.y - c.y);
 
-                var dx0 = (a.x - b.x);
-                var dx1 = (b.x - c.x);
-                var dx2 = (c.x - a.x);
+                const dx0 = (a.x - b.x);
+                const dx1 = (b.x - c.x);
+                const dx2 = (c.x - a.x);
 
                 var y: u32 = aabb.min_y;
                 while (y <= aabb.max_y) : (y += 1) {
@@ -158,14 +164,14 @@ pub fn render(theta: f32) !void {
 
                     while (x <= aabb.max_x) : (x += 1) {
                         if (windingOrderTest(winding_order, w_x0, w_x1, w_x2)) {
-                            var area0 = w_x0 / area;
-                            var area1 = w_x1 / area;
-                            var area2 = w_x2 / area;
+                            const area0 = w_x0 / area;
+                            const area1 = w_x1 / area;
+                            const area2 = w_x2 / area;
 
-                            var z = 1.0 / (area1 * a.z + area2 * b.z + area0 * c.z);
+                            const z = 1.0 / (area1 * a.z + area2 * b.z + area0 * c.z);
 
                             if (z < depth_buffer.getPixel(x, y)) {
-                                depth_buffer.putPixel(x, y, @floatCast(f16, z));
+                                depth_buffer.putPixel(x, y, @floatCast(z));
 
                                 var u = area1 * a_uv.x + area2 * b_uv.x + area0 * c_uv.x;
                                 var v = area1 * a_uv.y + area2 * b_uv.y + area0 * c_uv.y;
@@ -179,18 +185,19 @@ pub fn render(theta: f32) !void {
                                 // WHYYYYYYYYYYYYYY!!!!!!
                                 v = 1.0 - v;
 
-                                var tex_u = @floatToInt(u32, u * tex_width_f32);
-                                var tex_v = @floatToInt(u32, v * tex_height_f32);
+                                const tex_u:u32 = @intFromFloat(u * tex_width_f32);
+                                const tex_v:u32 = @intFromFloat(v * tex_height_f32);
 
-                                var albedo = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].toColorf32();
+                                var albedo = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].to.float4();
+                                // albedo[0]
 
-                                var pong = std.math.max(0.0, Vec3.dot(normal, light_dir));
+                                const pong = @max(0.0, Vec3.dot(normal, light_dir));
 
-                                albedo.r *= pong;
-                                albedo.g *= pong;
-                                albedo.b *= pong;
+                                albedo[0] *= pong;
+                                albedo[1] *= pong;
+                                albedo[2] *= pong;
 
-                                frame_buffer.putPixel(x, y, Color{ .r = @floatCast(f16, albedo.r), .g = @floatCast(f16, albedo.g), .b = @floatCast(f16, albedo.b) });
+                                frame_buffer.putPixel(x, y, Color{ .r = @floatCast(albedo[0]), .g = @floatCast(albedo[1]), .b = @floatCast(albedo[2]) });
                             }
                         }
                         w_x0 += dy0;
@@ -207,8 +214,8 @@ pub fn render(theta: f32) !void {
 }
 
 pub fn deinit() void {
-    mesh.deinit();
-    albedo_tex.deinit();
+    mesh.deinit(allocator);
+    albedo_tex.deinit(allocator);
     frame_buffer.deinit();
     depth_buffer.deinit();
     arena.deinit();
