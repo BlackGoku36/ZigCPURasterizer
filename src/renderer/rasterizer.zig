@@ -24,13 +24,9 @@ const AABB = struct {
     max_y: u32,
 
     fn getFrom(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) ?AABB {
-        // var min_x = std.math.min3(ax, bx, cx);
-        // var min_y = std.math.min3(ay, by, cy);
         var min_x = @min(ax, bx, cx);
         var min_y = @min(ay, by, cy);
 
-        // var max_x = std.math.max3(ax, bx, cx);
-        // var max_y = std.math.max3(ay, by, cy);
         var max_x = @max(ax, bx, cx);
         var max_y = @max(ay, by, cy);
 
@@ -185,11 +181,10 @@ pub fn render(theta: f32) !void {
                                 // WHYYYYYYYYYYYYYY!!!!!!
                                 v = 1.0 - v;
 
-                                const tex_u:u32 = @intFromFloat(u * tex_width_f32);
-                                const tex_v:u32 = @intFromFloat(v * tex_height_f32);
+                                const tex_u: u32 = @intFromFloat(u * tex_width_f32);
+                                const tex_v: u32 = @intFromFloat(v * tex_height_f32);
 
                                 var albedo = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].to.float4();
-                                // albedo[0]
 
                                 const pong = @max(0.0, Vec3.dot(normal, light_dir));
 

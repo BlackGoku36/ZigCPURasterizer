@@ -1,9 +1,6 @@
 const std = @import("std");
 const sokol = @import("sokol");
-// const sokol = @import("sokol");
 const slog = sokol.log;
-// const sg = sokol.gfx;
-// const sapp = sokol.app;
 const sglue = sokol.glue;
 
 const sg = sokol.gfx;
@@ -30,11 +27,10 @@ export fn init() void {
         std.debug.print("error: {any}", .{err});
     };
 
-    // sg.setup(.{ .context = sgapp.context() });
     sg.setup(.{
-            .environment = sglue.environment(),
-            .logger = .{ .func = slog.func },
-        });
+        .environment = sglue.environment(),
+        .logger = .{ .func = slog.func },
+    });
 
     const quad_vbuf = sg.makeBuffer(.{ .data = sg.asRange(&[_]f32{ 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0 }) });
 
@@ -58,20 +54,20 @@ export fn init() void {
     state.db_image = sg.makeImage(db_img_desc);
 
     const sampler = sg.makeSampler(.{
-            .min_filter = sg.Filter.LINEAR,
-            .mag_filter = sg.Filter.LINEAR,
-            .wrap_u = sg.Wrap.CLAMP_TO_EDGE,
-            .wrap_v = sg.Wrap.CLAMP_TO_EDGE,
-            .label = "png-sampler",
-        });
+        .min_filter = sg.Filter.LINEAR,
+        .mag_filter = sg.Filter.LINEAR,
+        .wrap_u = sg.Wrap.CLAMP_TO_EDGE,
+        .wrap_v = sg.Wrap.CLAMP_TO_EDGE,
+        .label = "png-sampler",
+    });
 
     state.bind.samplers[shd.SMP_smp] = sampler;
     state.dbg_bind.samplers[shd.SMP_smp] = sampler;
 
     state.bind.views[shd.VIEW_tex] = sg.makeView(.{
-    	.texture = .{
-    		.image = state.fb_image,
-    	},
+        .texture = .{
+            .image = state.fb_image,
+        },
     });
 
     const shader = sg.makeShader(shd.shaderShaderDesc(sg.queryBackend()));
@@ -85,9 +81,9 @@ export fn init() void {
 
     state.dbg_bind.vertex_buffers[0] = quad_vbuf;
     state.dbg_bind.views[shd.VIEW_tex] = sg.makeView(.{
-    	.texture = .{
-     		.image = state.db_image,
-     	},
+        .texture = .{
+            .image = state.db_image,
+        },
     });
     var dbg_pip_desc: sg.PipelineDesc = .{
         .primitive_type = .TRIANGLE_STRIP,
@@ -118,8 +114,7 @@ export fn frame() void {
     db_image_data.mip_levels[0] = sg.asRange(rasterizer.depth_buffer.buffer);
     sg.updateImage(state.db_image, db_image_data);
 
-    // sg.beginDefaultPass(state.pass_action, sapp.width(), sapp.height());
-    sg.beginPass(.{.action = state.pass_action, .swapchain = sglue.swapchain()});
+    sg.beginPass(.{ .action = state.pass_action, .swapchain = sglue.swapchain() });
     sg.applyPipeline(state.pip);
     sg.applyBindings(state.bind);
     sg.draw(0, 4, 1);

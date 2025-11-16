@@ -40,14 +40,8 @@ pub const Mesh = struct {
         var stdin_buffer: [512]u8 = undefined;
         var stdin_reader_wrapper = file.reader(&stdin_buffer);
         const in_stream: *std.Io.Reader = &stdin_reader_wrapper.interface;
-        // in_stream.delimite
 
-        // var buf_reader = std.io.bufferedReader(file.reader());
-        // var in_stream = file.reader();
-
-        // var buf: [1024]u8 = undefined;
         while (in_stream.takeDelimiterExclusive('\n')) |line| {
-            // var words = std.mem.tokenize(u8, std.mem.trim(u8, line, "\r"), " ");
             var words = std.mem.tokenizeScalar(u8, std.mem.trim(u8, line, "\r"), ' ');
 
             if (words.next()) |elem_type| {
@@ -75,18 +69,18 @@ pub const Mesh = struct {
                 }
             }
         } else |err| switch (err) {
-       	error.EndOfStream => {
-                    // reached end
-                    // the normal case
-                },
-                error.StreamTooLong => {
-                    // the line was longer than the internal buffer
-                    return err;
-                },
-                error.ReadFailed => {
-                    // the read failed
-                    return err;
-                },
+            error.EndOfStream => {
+                // reached end
+                // the normal case
+            },
+            error.StreamTooLong => {
+                // the line was longer than the internal buffer
+                return err;
+            },
+            error.ReadFailed => {
+                // the read failed
+                return err;
+            },
         }
 
         for (idx.items) |val| {
@@ -108,7 +102,7 @@ pub const Mesh = struct {
         // var elems = std.mem.split(u8, face, "/");
         var elems = std.mem.splitScalar(u8, face, '/');
         const index = try std.fmt.parseInt(u32, elems.next().?, 10);
-        try idx.append(allocator,index - 1);
+        try idx.append(allocator, index - 1);
 
         const uv = elems.next().?;
 
