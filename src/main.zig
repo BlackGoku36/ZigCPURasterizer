@@ -101,6 +101,8 @@ const to_rad = std.math.pi / 180.0;
 var animation_time_start: i64 = 0;
 var animation_time_accum: i64 = 0;
 
+var anim_play: bool = true;
+
 const animation_len = 20 * std.time.ms_per_s;
 
 export fn frame() void {
@@ -110,7 +112,7 @@ export fn frame() void {
 	}
     const animation_time_end = std.time.milliTimestamp();
     const animation_time_diff = animation_time_end - animation_time_start;
-    animation_time_accum += animation_time_diff;
+    if(anim_play) animation_time_accum += animation_time_diff;
     // We want to rotate the object by 360 in second (despite framerate)
     // we map millisecond time to range [0.0, 1.0] the convert it to range in degrees
     const normalized_time = @as(f32, @floatFromInt(@mod(animation_time_accum, animation_len))) / animation_len;
@@ -159,6 +161,13 @@ export fn input(ev: ?*const sapp.Event) void {
     	.KEY_DOWN => {
      		switch (event.key_code){
        			.Q, .ESCAPE => sapp.requestQuit(),
+          		.SPACE => {
+            		if(anim_play){
+              			anim_play = false;
+              		}else{
+                		anim_play = true;
+                	}
+            	},
           		else => {},
        		}
      	},
