@@ -41,3 +41,8 @@ Avg.  Time (Min - Max): 122.10526 - 128.07500
 Lion (New | Debug):
 Frame Time (Min - Max): 92 - 118
 Avg.  Time (Min - Max): 107.01357 - 112.09677
+
+Note: There wasn't any (apparent) performance improvement from using 
+new datastructure compared to used zigimg directly. Most of the improvements
+is from moving image operation (normal map [0, 1] -> [-1, 1] and albedo's srgb -> linear)
+conversions.
