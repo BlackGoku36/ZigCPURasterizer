@@ -12,6 +12,11 @@ const RenderTargetRGBA16 = rendertarget.RenderTargetRGBA16;
 const RenderTargetR16 = rendertarget.RenderTargetR16;
 const Color = rendertarget.Color;
 
+const TextureR = @import("../utils/texture.zig").TextureR;
+const TextureRGB = @import("../utils/texture.zig").TextureRGB;
+const TexturePBR = @import("../utils/texture.zig").TexturePBR;
+const PBRTextureDescriptor = @import("../utils/texture.zig").PBRTextureDescriptor;
+
 const Mesh = @import("../mesh.zig").Mesh;
 
 pub const width = 1280;
@@ -319,14 +324,7 @@ pub var depth_buffer: RenderTargetR16 = undefined;
 
 var mesh: Mesh = undefined;
 
-var albedo_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-var albedo_tex: zigimg.Image = undefined;
-var metal_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-var metal_tex: zigimg.Image = undefined;
-var roughness_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-var roughness_tex: zigimg.Image = undefined;
-var normal_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-var normal_tex: zigimg.Image = undefined;
+var texture_pbr: TexturePBR = undefined;
 
 var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
@@ -335,20 +333,20 @@ const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromIn
 const winding_order = WindingOrder.CCW;
 
 // Lion
-// const light_pos = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
+const light_pos = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
 // Sphere
 // const light_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
 // Camera
-const light_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
+// const light_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
 const light_to = Vec3{ .x = 30.0, .y = 2.0, .z = 0.0 };
 
 // Lion
-// const camera_pos = Vec3{.x = -0.6, .y = 0.2, .z = 0.0 };
+const camera_pos = Vec3{.x = -0.6, .y = 0.2, .z = 0.0 };
 // Sphere
 // const camera_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
 // Camera
-const camera_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
-const to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+// const camera_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
+const to = Vec3{ .x = 0.0, .y = 0.2, .z = 0.0 };
 const up = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
 
 const projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 0.1, 100.0);
@@ -357,23 +355,15 @@ const view_mat = Matrix4.lookAt(camera_pos, to, up);
 pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
-    // mesh = try Mesh.fromObjFile("lion_head_2k.obj", allocator);
-    // albedo_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_diff_2k.png", albedo_read_buffer[0..]);
-    // metal_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_metal_2k.png", metal_read_buffer[0..]);
-    // roughness_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_rough_2k.png", roughness_read_buffer[0..]);
-    // normal_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_normal_gl_2k.png", normal_read_buffer[0..]);
-    // mesh = try Mesh.fromObjFile("sphere.obj", allocator);
-    // albedo_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_basecolor.png", albedo_read_buffer[0..]);
-    // metal_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_metallic.png", metal_read_buffer[0..]);
-    // roughness_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_roughness.png", roughness_read_buffer[0..]);
-    // normal_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_normal.png", normal_read_buffer[0..]);
-    mesh = try Mesh.fromObjFile("Camera.obj", allocator);
-    albedo_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_diff.png", albedo_read_buffer[0..]);
-    metal_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_metallic.png", metal_read_buffer[0..]);
-    roughness_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_roughness.png", roughness_read_buffer[0..]);
-    normal_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_nor.png", normal_read_buffer[0..]);
-    tex_width_f32 = @floatFromInt(albedo_tex.width);
-    tex_height_f32 = @floatFromInt(albedo_tex.height);
+    mesh = try Mesh.fromObjFile("lion_head_2k.obj", allocator);
+    texture_pbr = try TexturePBR.loadTextureFromFile(PBRTextureDescriptor{
+    	.albedo_tex_path = "lion_head_diff_2k.png",
+    	.normal_tex_path = "lion_head_normal_gl_2k.png",
+    	.metallic_tex_path = "lion_head_metal_2k.png",
+    	.roughness_tex_path = "lion_head_rough_2k.png",
+    }, allocator);
+    tex_width_f32 = @floatFromInt(texture_pbr.width);
+    tex_height_f32 = @floatFromInt(texture_pbr.height);
 }
 
 pub fn render(theta: f32) !void {
@@ -520,29 +510,13 @@ pub fn render(theta: f32) !void {
                                 const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
 
                                 const ao: f32 = 0.1;
+                                const pbr = texture_pbr.buffer[tex_v * texture_pbr.width + tex_u];
+                                const albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
+                                const normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
+                                const metallic:f32 = @floatCast(pbr.metallic);
+                                const roughness:f32 = @floatCast(pbr.roughness);
 
-                                const func = zigimg.color.ScaleValue(f32);
-                                // Lion
-                                // const albedo_map = albedo_tex.pixels.rgb48[tex_v * albedo_tex.width + tex_u].to.float4();
-                                // const normal_map = normal_tex.pixels.rgb48[tex_v * normal_tex.width + tex_u].to.float4();
-                                // const metallic = func(metal_tex.pixels.grayscale16[tex_v * metal_tex.width + tex_u].value);
-                                // const roughness = func(roughness_tex.pixels.grayscale16[tex_v * roughness_tex.width + tex_u].value);
-                                // Sphere
-                                // const albedo_map = albedo_tex.pixels.rgba32[tex_v * albedo_tex.width + tex_u].to.float4();
-                                // const normal_map = normal_tex.pixels.rgb24[tex_v * normal_tex.width + tex_u].to.float4();
-                                // const metallic = func(metal_tex.pixels.grayscale8[tex_v * metal_tex.width + tex_u].value);
-                                // const roughness = func(roughness_tex.pixels.grayscale8[tex_v * roughness_tex.width + tex_u].value);
-                                // Camera
-                                const albedo_map = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].to.float4();
-                                const normal_map = normal_tex.pixels.rgb24[tex_v * normal_tex.width + tex_u].to.float4();
-                                const metallic = func(metal_tex.pixels.grayscale8[tex_v * metal_tex.width + tex_u].value);
-                                const roughness = func(roughness_tex.pixels.grayscale8[tex_v * roughness_tex.width + tex_u].value);
-                                var albedo = Vec3{ .x = albedo_map[0], .y = albedo_map[1], .z = albedo_map[2] };
-                                albedo = albedo.pow(Vec3.init(2.2));
-
-                                var normal = Vec3.normalize(Vec3{ .x = normal_map[0] * 2.0 - 1.0, .y = normal_map[1] * 2.0 - 1.0, .z = normal_map[2] * 2.0 - 1.0 });
-                                normal = Vec3.add(Vec3.multf(tangent, normal.x), Vec3.add(Vec3.multf(bitangent, normal.y), Vec3.multf(frag_normal, normal.z)));
-                                normal = Vec3.normalize(normal);
+                                const normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
 
                                 const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
                                 const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
@@ -609,7 +583,7 @@ pub fn render(theta: f32) !void {
 
 pub fn deinit() void {
     mesh.deinit(allocator);
-    albedo_tex.deinit(allocator);
+    texture_pbr.deinit(allocator);
     frame_buffer.deinit();
     depth_buffer.deinit();
     arena.deinit();

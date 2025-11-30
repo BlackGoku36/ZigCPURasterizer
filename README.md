@@ -25,3 +25,19 @@ Some refs:
 - http://acta.uni-obuda.hu/Mileff_Nehez_Dudra_63.pdf
 - https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/
 - https://www.cs.drexel.edu/~david/Classes/Papers/comp175-06-pineda.pdf
+
+Lion (Prev | ReleaseFast):
+Frame Time (Min - Max): 22 - 31
+Avg.  Time (Min - Max): 26.68868 - 30.67742
+
+Lion (New | ReleaseFast):
+Frame Time (Min - Max): 19 - 27
+Avg.  Time (Min - Max): 21.70513 - 23.67742
+
+Lion (Prev | Debug):
+Frame Time (Min - Max): 106 - 142
+Avg.  Time (Min - Max): 122.10526 - 128.07500
+
+Lion (New | Debug):
+Frame Time (Min - Max): 92 - 118
+Avg.  Time (Min - Max): 107.01357 - 112.09677

@@ -105,6 +105,11 @@ var anim_play: bool = true;
 
 const animation_len = 10 * std.time.ms_per_s;
 
+var min_time: i64 = 1000000;
+var max_time: i64 = 0;
+var min_avg_time: f64 = 10000000.0;
+var max_avg_time: f64 = 0.0;
+
 export fn frame() void {
     if (num_frames == 1000) {
         num_frames = 0;
@@ -152,6 +157,10 @@ export fn frame() void {
     const avg_time: f64 = @as(f64, @floatFromInt(time_accum)) / @as(f64, @floatFromInt(num_frames));
     const window_title = std.fmt.bufPrintZ(&buffer, "ZigCPURasterizer | {d} ms | Avg {d:.5} ms", .{ interval, avg_time }) catch "ZigCPURasterizer";
     sapp.setWindowTitle(window_title);
+    if(interval < min_time) min_time = interval;
+    if(interval > max_time) max_time = interval;
+    if(avg_time < min_avg_time) min_avg_time = avg_time;
+    if(avg_time > max_avg_time and avg_time != std.math.inf(f64) and num_frames > 30) max_avg_time = avg_time;
     num_frames += 1;
 }
 
@@ -160,7 +169,11 @@ export fn input(ev: ?*const sapp.Event) void {
     switch (event.type) {
         .KEY_DOWN => {
             switch (event.key_code) {
-                .Q, .ESCAPE => sapp.requestQuit(),
+                .Q, .ESCAPE => {
+                 	std.debug.print("Frame Time (Min - Max): {d} - {d}\n", .{min_time, max_time});
+                  	std.debug.print("Avg.  Time (Min - Max): {d:.5} - {d:.5}\n", .{min_avg_time, max_avg_time});
+                	sapp.requestQuit();
+                },
                 .SPACE => {
                     if (anim_play) {
                         anim_play = false;
