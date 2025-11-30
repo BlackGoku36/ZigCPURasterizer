@@ -34,22 +34,22 @@ pub const Matrix4 = struct {
     }
 
     // pub fn fromVec3(a: Vec3, b: Vec3, c: Vec3) Matrix4 {
-	   //  const out_mat = [4 * 4]f32{
-	   //      a.x, a.y, a.z, 0,
-	   //      b.x, b.y, b.z, 0,
-	   //      c.x, c.y, c.z, 0,
-	   //      0, 0, 0, 1,
-	   //  };
-	   //  return Matrix4{ .mat = out_mat };
+    //  const out_mat = [4 * 4]f32{
+    //      a.x, a.y, a.z, 0,
+    //      b.x, b.y, b.z, 0,
+    //      c.x, c.y, c.z, 0,
+    //      0, 0, 0, 1,
+    //  };
+    //  return Matrix4{ .mat = out_mat };
     // }
 
     pub fn fromVec3(a: Vec3, b: Vec3, c: Vec3) Matrix4 {
         // Creates a matrix with a, b, c as COLUMNS (not rows)
         const out_mat = [4 * 4]f32{
-            a.x, b.x, c.x, 0,  // Row 0: first components of each vector
-            a.y, b.y, c.y, 0,  // Row 1: second components of each vector
-            a.z, b.z, c.z, 0,  // Row 2: third components of each vector
-            0,   0,   0,   1,  // Row 3: homogeneous coordinate
+            a.x, b.x, c.x, 0, // Row 0: first components of each vector
+            a.y, b.y, c.y, 0, // Row 1: second components of each vector
+            a.z, b.z, c.z, 0, // Row 2: third components of each vector
+            0, 0, 0, 1, // Row 3: homogeneous coordinate
         };
         return Matrix4{ .mat = out_mat };
     }
@@ -85,9 +85,9 @@ pub const Matrix4 = struct {
         const w: f32 = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
 
         // if (w != 1.0) {
-            out_vec.x /= w;
-            out_vec.y /= w;
-            out_vec.z /= w;
+        out_vec.x /= w;
+        out_vec.y /= w;
+        out_vec.z /= w;
         // }
         return out_vec;
     }
@@ -100,9 +100,9 @@ pub const Matrix4 = struct {
         out_vec.w = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
 
         // if (w != 1.0) {
-            // out_vec.x /= w;
-            // out_vec.y /= w;
-            // out_vec.z /= w;
+        // out_vec.x /= w;
+        // out_vec.y /= w;
+        // out_vec.z /= w;
         // }
         return out_vec;
     }
@@ -225,7 +225,7 @@ pub const Matrix4 = struct {
 
         // Check if matrix is invertible
         // if (@abs(det) < 1e-8) {
-            // return null;
+        // return null;
         // }
 
         const inv_det = 1.0 / det;

@@ -106,13 +106,13 @@ var anim_play: bool = true;
 const animation_len = 10 * std.time.ms_per_s;
 
 export fn frame() void {
-	if(num_frames == 1000){
-		num_frames = 0;
-		time_accum = 0;
-	}
+    if (num_frames == 1000) {
+        num_frames = 0;
+        time_accum = 0;
+    }
     const animation_time_end = std.time.milliTimestamp();
     const animation_time_diff = animation_time_end - animation_time_start;
-    if(anim_play) animation_time_accum += animation_time_diff;
+    if (anim_play) animation_time_accum += animation_time_diff;
     // We want to rotate the object by 360 in second (despite framerate)
     // we map millisecond time to range [0.0, 1.0] the convert it to range in degrees
     const normalized_time = @as(f32, @floatFromInt(@mod(animation_time_accum, animation_len))) / animation_len;
@@ -148,33 +148,32 @@ export fn frame() void {
     sg.endPass();
     sg.commit();
 
-   	var buffer: [256:0]u8 = undefined;
-    const avg_time:f64 = @as(f64, @floatFromInt(time_accum))/@as(f64, @floatFromInt(num_frames));
-	const window_title = std.fmt.bufPrintZ(&buffer, "ZigCPURasterizer | {d} ms | Avg {d:.5} ms", .{interval, avg_time}) catch "ZigCPURasterizer";
-	sapp.setWindowTitle(window_title);
-	num_frames += 1;
+    var buffer: [256:0]u8 = undefined;
+    const avg_time: f64 = @as(f64, @floatFromInt(time_accum)) / @as(f64, @floatFromInt(num_frames));
+    const window_title = std.fmt.bufPrintZ(&buffer, "ZigCPURasterizer | {d} ms | Avg {d:.5} ms", .{ interval, avg_time }) catch "ZigCPURasterizer";
+    sapp.setWindowTitle(window_title);
+    num_frames += 1;
 }
 
 export fn input(ev: ?*const sapp.Event) void {
     const event = ev.?;
     switch (event.type) {
-    	.KEY_DOWN => {
-     		switch (event.key_code){
-       			.Q, .ESCAPE => sapp.requestQuit(),
-          		.SPACE => {
-            		if(anim_play){
-              			anim_play = false;
-              		}else{
-                		anim_play = true;
-                	}
-            	},
-          		else => {},
-       		}
-     	},
-      	else => {},
+        .KEY_DOWN => {
+            switch (event.key_code) {
+                .Q, .ESCAPE => sapp.requestQuit(),
+                .SPACE => {
+                    if (anim_play) {
+                        anim_play = false;
+                    } else {
+                        anim_play = true;
+                    }
+                },
+                else => {},
+            }
+        },
+        else => {},
     }
 }
-
 
 export fn cleanup() void {
     rasterizer.deinit();
@@ -182,7 +181,18 @@ export fn cleanup() void {
 }
 
 pub fn main() void {
-    sapp.run(.{ .init_cb = init, .frame_cb = frame, .cleanup_cb = cleanup, .width = rasterizer.width, .height = rasterizer.height, .icon = .{
-        .sokol_default = true,
-    }, .window_title = "ZigSoftwareRasterizerCPU", .event_cb = input, },);
+    sapp.run(
+        .{
+            .init_cb = init,
+            .frame_cb = frame,
+            .cleanup_cb = cleanup,
+            .width = rasterizer.width,
+            .height = rasterizer.height,
+            .icon = .{
+                .sokol_default = true,
+            },
+            .window_title = "ZigSoftwareRasterizerCPU",
+            .event_cb = input,
+        },
+    );
 }

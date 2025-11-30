@@ -33,13 +33,8 @@ pub const Vec4 = struct {
     }
 
     pub fn clipToNDC(v: Vec4) Vec4 {
-   		const clipped_a: Vec4 = Vec4{
-    		.x = v.x / v.w,
-    		.y = v.y / v.w,
-    		.z = v.z / v.w,
-       		.w = 1.0 / v.w
-    	};
-     	return clipped_a;
+        const clipped_a: Vec4 = Vec4{ .x = v.x / v.w, .y = v.y / v.w, .z = v.z / v.w, .w = 1.0 / v.w };
+        return clipped_a;
     }
 
     pub fn ndcToRaster(a: Vec4, width: f32, height: f32) Vec3 {
