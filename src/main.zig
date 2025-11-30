@@ -103,7 +103,7 @@ var animation_time_accum: i64 = 0;
 
 var anim_play: bool = true;
 
-const animation_len = 20 * std.time.ms_per_s;
+const animation_len = 10 * std.time.ms_per_s;
 
 export fn frame() void {
 	if(num_frames == 1000){

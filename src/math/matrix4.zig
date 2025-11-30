@@ -33,6 +33,27 @@ pub const Matrix4 = struct {
         mat.mat[y * 4 + x] = val;
     }
 
+    // pub fn fromVec3(a: Vec3, b: Vec3, c: Vec3) Matrix4 {
+	   //  const out_mat = [4 * 4]f32{
+	   //      a.x, a.y, a.z, 0,
+	   //      b.x, b.y, b.z, 0,
+	   //      c.x, c.y, c.z, 0,
+	   //      0, 0, 0, 1,
+	   //  };
+	   //  return Matrix4{ .mat = out_mat };
+    // }
+
+    pub fn fromVec3(a: Vec3, b: Vec3, c: Vec3) Matrix4 {
+        // Creates a matrix with a, b, c as COLUMNS (not rows)
+        const out_mat = [4 * 4]f32{
+            a.x, b.x, c.x, 0,  // Row 0: first components of each vector
+            a.y, b.y, c.y, 0,  // Row 1: second components of each vector
+            a.z, b.z, c.z, 0,  // Row 2: third components of each vector
+            0,   0,   0,   1,  // Row 3: homogeneous coordinate
+        };
+        return Matrix4{ .mat = out_mat };
+    }
+
     pub fn multMatrix4(a: Matrix4, b: Matrix4) Matrix4 {
         var out_mat = comptime getZero();
 

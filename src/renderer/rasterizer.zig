@@ -22,6 +22,8 @@ const ClippingPlane = enum(u8) {NEAR, FAR, LEFT, RIGHT, TOP, BOTTOM};
 const Vertex = struct {
 	position: Vec4,
 	world_position: Vec3,
+	tangent: Vec3,
+	bitangent: Vec3,
 	normal: Vec3,
 	uv: Vec2,
 };
@@ -67,6 +69,8 @@ fn lerpVertex(vertex_a: Vertex, vertex_b: Vertex, t: f32) Vertex {
 	return Vertex{
 		.position = lerpVec4(vertex_a.position, vertex_b.position, t),
 		.world_position = lerpVec3(vertex_a.world_position, vertex_b.world_position, t),
+		.tangent = lerpVec3(vertex_a.tangent, vertex_b.tangent, t),
+		.bitangent = lerpVec3(vertex_a.bitangent, vertex_b.bitangent, t),
 		.normal = lerpVec3(vertex_a.normal, vertex_b.normal, t),
 		.uv = lerpVec2(vertex_a.uv, vertex_b.uv, t),
 	};
@@ -235,12 +239,16 @@ fn windingOrderTest(order: WindingOrder, w0: f32, w1: f32, w2: f32) bool {
 fn vertexClipToNDC(vertex: Vertex) Vertex {
 	const pos = vertex.position;
 	const world_pos = vertex.world_position;
+	const tangent = vertex.tangent;
+	const bitangent = vertex.bitangent;
 	const nor = vertex.normal;
 	const uv = vertex.uv;
 	const one_over_w = 1.0 / pos.w;
 	return Vertex{
 		.position = Vec4{.x = pos.x / pos.w, .y = pos.y / pos.w, .z = pos.z / pos.w, .w = pos.w},
 		.world_position = Vec3{.x = world_pos.x * one_over_w, .y = world_pos.y * one_over_w, .z = world_pos.z * one_over_w},
+		.tangent = Vec3{.x = tangent.x * one_over_w, .y = tangent.y * one_over_w, .z = tangent.z * one_over_w},
+		.bitangent = Vec3{.x = bitangent.x * one_over_w, .y = bitangent.y * one_over_w, .z = bitangent.z * one_over_w},
 		.normal = Vec3{.x = nor.x * one_over_w, .y = nor.y * one_over_w, .z = nor.z * one_over_w},
 		.uv = Vec2{.x = uv.x * one_over_w, .y = uv.y * one_over_w},
 	};
@@ -254,6 +262,63 @@ fn triClipToNDC(tri: Tri) Tri {
 	};
 }
 
+fn fresnelSchlick(f0: Vec3, cosTheta: f32) Vec3 {
+	// F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+	const c = std.math.pow(f32, std.math.clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+	return Vec3{
+		.x = f0.x + (1.0 - f0.x) * c,
+		.y = f0.y + (1.0 - f0.y) * c,
+		.z = f0.z + (1.0 - f0.z) * c,
+	};
+}
+
+fn normalDistributionGGX(normal: Vec3, half_vec: Vec3, roughness: f32) f32 {
+    const a: f32      = roughness*roughness;
+    const a2: f32     = a*a;
+    const ndotH: f32  = @max(Vec3.dot(normal, half_vec), 0.0);
+    const ndotH2: f32 = ndotH*ndotH;
+
+    const num:f32   = a2;
+    var denom:f32 = (ndotH2 * (a2 - 1.0) + 1.0);
+    denom = std.math.pi * denom * denom;
+
+    return num / denom;
+}
+
+fn geometrySchlickGGX(ndotV: f32, roughness: f32) f32 {
+    const r: f32 = (roughness + 1.0);
+    const k: f32 = (r*r) / 8.0;
+
+    const num: f32   = ndotV;
+    const denom: f32 = ndotV * (1.0 - k) + k;
+
+    return num / denom;
+}
+
+fn geometrySmith(normal: Vec3, view_dir: Vec3, light_dir: Vec3, roughness: f32) f32 {
+    const ndotV: f32 = @max(Vec3.dot(normal, view_dir), 0.0);
+    const ndotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+    const ggx2: f32  = geometrySchlickGGX(ndotV, roughness);
+    const ggx1: f32  = geometrySchlickGGX(ndotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+fn calculateTangent(pos1: Vec3, pos2: Vec3, pos3: Vec3, uv1: Vec2, uv2: Vec2, uv3: Vec2) Vec3 {
+    const edge1:Vec3 = Vec3.sub(pos2, pos1);
+    const edge2:Vec3 = Vec3.sub(pos3, pos1);
+    const deltaUV1:Vec2 = Vec2.sub(uv2, uv1);
+    const deltaUV2:Vec2 = Vec2.sub(uv3, uv1);
+
+    const f:f32 = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+    var tangent: Vec3 = Vec3.init(0.0);
+    tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+    tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+    tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+    return tangent;
+}
+
 pub var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 const allocator = arena.allocator();
 pub var frame_buffer: RenderTargetRGBA16 = undefined;
@@ -263,6 +328,12 @@ var mesh: Mesh = undefined;
 
 var albedo_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
 var albedo_tex: zigimg.Image = undefined;
+var metal_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+var metal_tex: zigimg.Image = undefined;
+var roughness_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+var roughness_tex: zigimg.Image = undefined;
+var normal_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+var normal_tex: zigimg.Image = undefined;
 
 var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
@@ -270,21 +341,44 @@ const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromIn
 
 const winding_order = WindingOrder.CCW;
 
-const light_from = Vec3{ .x = 0.0, .y = 3.0, .z = 0.0 };
+// Lion
+// const light_pos = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
+// Sphere
+// const light_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
+// Camera
+const light_pos = Vec3{.x = -0.3, .y = 0.1, .z = 0.0 };
 const light_to = Vec3{ .x = 30.0, .y = 2.0, .z = 0.0 };
 
-const from = Vec3{.x = -0.7, .y = 0.2, .z = 0.0 };
-const to = Vec3{ .x = 0.0, .y = 0.2, .z = 0.0 };
+// Lion
+// const camera_pos = Vec3{.x = -0.6, .y = 0.2, .z = 0.0 };
+// Sphere
+// const camera_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
+// Camera
+const camera_pos = Vec3{.x = -0.3, .y = 0.1, .z = 0.0 };
+const to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
 const up = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
 
 const projection_mat = Matrix4.perspectiveProjection(45.0, aspect_ratio, 0.1, 100.0);
-const view_mat = Matrix4.lookAt(from, to, up);
+const view_mat = Matrix4.lookAt(camera_pos, to, up);
 
 pub fn init() !void {
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
-    mesh = try Mesh.fromObjFile("lion_head_2k.obj", allocator);
-    albedo_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_diff_2k.png", albedo_read_buffer[0..]);
+    // mesh = try Mesh.fromObjFile("lion_head_2k.obj", allocator);
+    // albedo_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_diff_2k.png", albedo_read_buffer[0..]);
+    // metal_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_metal_2k.png", metal_read_buffer[0..]);
+    // roughness_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_rough_2k.png", roughness_read_buffer[0..]);
+    // normal_tex = try zigimg.Image.fromFilePath(allocator, "lion_head_normal_gl_2k.png", normal_read_buffer[0..]);
+    // mesh = try Mesh.fromObjFile("sphere.obj", allocator);
+    // albedo_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_basecolor.png", albedo_read_buffer[0..]);
+    // metal_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_metallic.png", metal_read_buffer[0..]);
+    // roughness_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_roughness.png", roughness_read_buffer[0..]);
+    // normal_tex = try zigimg.Image.fromFilePath(allocator, "rustediron2_normal.png", normal_read_buffer[0..]);
+    mesh = try Mesh.fromObjFile("Camera.obj", allocator);
+    albedo_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_diff.png", albedo_read_buffer[0..]);
+    metal_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_metallic.png", metal_read_buffer[0..]);
+    roughness_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_roughness.png", roughness_read_buffer[0..]);
+    normal_tex = try zigimg.Image.fromFilePath(allocator, "Camera_body_nor.png", normal_read_buffer[0..]);
     tex_width_f32 = @floatFromInt(albedo_tex.width);
     tex_height_f32 = @floatFromInt(albedo_tex.height);
 }
@@ -308,26 +402,45 @@ pub fn render(theta: f32) !void {
         const norm2 = mesh.normals.items[i+1];
         const norm3 = mesh.normals.items[i+2];
 
-        const newNorm1 = Matrix4.multVec3(model_mat, norm1);
-        const newNorm2 = Matrix4.multVec3(model_mat, norm2);
-        const newNorm3 = Matrix4.multVec3(model_mat, norm3);
+        const uv1 = mesh.uvs.items[i];
+        const uv2 = mesh.uvs.items[i+1];
+        const uv3 = mesh.uvs.items[i+2];
+
+        const tan1 = calculateTangent(vert1, vert2, vert3, uv1, uv2, uv3);
+        const tan2 = calculateTangent(vert2, vert3, vert1, uv2, uv3, uv1);
+        const tan3 = calculateTangent(vert3, vert1, vert2, uv3, uv1, uv2);
+
+        const normalMatrix = model_mat;//Matrix4.transpose(Matrix4.invert(model_mat));
+
+        const newNorm1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm1));
+        const newNorm2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm2));
+        const newNorm3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm3));
+
+        var newTan1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan1));
+        var newTan2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan2));
+        var newTan3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan3));
+
+        // T = normalize(T - dot(T, N) * N);
+        newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
+        newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
+        newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
+
+        const newBitan1 = Vec3.normalize(Vec3.cross(newTan1, newNorm1));
+        const newBitan2 = Vec3.normalize(Vec3.cross(newTan2, newNorm2));
+        const newBitan3 = Vec3.normalize(Vec3.cross(newTan3, newNorm3));
 
         const world_pos1 = Matrix4.multVec3(model_mat, vert1);
         const world_pos2 = Matrix4.multVec3(model_mat, vert2);
         const world_pos3 = Matrix4.multVec3(model_mat, vert3);
-
-        const uv1 = mesh.uvs.items[i];
-        const uv2 = mesh.uvs.items[i+1];
-        const uv3 = mesh.uvs.items[i+2];
 
         const proj_vert1 = Matrix4.multVec4(view_projection_mat, vert1);
         const proj_vert2 = Matrix4.multVec4(view_projection_mat, vert2);
         const proj_vert3 = Matrix4.multVec4(view_projection_mat, vert3);
 
         var tri: Tri = undefined;
-        tri.v0 = Vertex{.position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1};
-        tri.v1 = Vertex{.position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2};
-        tri.v2 = Vertex{.position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3};
+        tri.v0 = Vertex{.position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = newTan1, .bitangent = newBitan1};
+        tri.v1 = Vertex{.position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2};
+        tri.v2 = Vertex{.position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3};
 
         // if (Vec3.dot(newNorm1, Vec3.normalize(Vec3.sub(from, Matrix4.multVec3(model_mat, vert1)))) > -0.25) {
 
@@ -336,11 +449,6 @@ pub fn render(theta: f32) !void {
 
         for (clipped_triangle, 0..) |triangle, t_idx| {
         	if(t_idx >= count) break;
-
-            const light_dir = Vec3.normalize(Vec3.sub(light_from, light_to));
-
-            // const normal = Vec3.cross(Vec3.sub(b_rot, a_rot), Vec3.sub(c_rot, a_rot)).normalize();
-            // const normal = triangle.v0.normal;
 
             const new_tri = triClipToNDC(triangle);
 
@@ -403,41 +511,96 @@ pub fn render(theta: f32) !void {
                                 const tex_u: u32 = @intFromFloat(u * tex_width_f32);
                                 const tex_v: u32 = @intFromFloat(v * tex_height_f32);
 
-                                var albedo = albedo_tex.pixels.rgb48[tex_v * albedo_tex.width + tex_u].to.float4();
+                                const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
+                                const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
+                                const tangentz = area1 * new_tri.v0.tangent.z + area2 * new_tri.v1.tangent.z + area0 * new_tri.v2.tangent.z;
+                                const tangent = Vec3.normalize(Vec3{.x = tangentx*w, .y = tangenty*w, .z = tangentz*w});
 
-                                // var u = area1 * a_uv.x + area2 * b_uv.x + area0 * c_uv.x;
-                                // var v = area1 * a_uv.y + area2 * b_uv.y + area0 * c_uv.y;
+                                const bitangentx = area1 * new_tri.v0.bitangent.x + area2 * new_tri.v1.bitangent.x + area0 * new_tri.v2.bitangent.x;
+                                const bitangenty = area1 * new_tri.v0.bitangent.y + area2 * new_tri.v1.bitangent.y + area0 * new_tri.v2.bitangent.y;
+                                const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
+                                const bitangent = Vec3.normalize(Vec3{.x = bitangentx*w, .y = bitangenty*w, .z = bitangentz*w});
+
                                 const norx = area1 * new_tri.v0.normal.x + area2 * new_tri.v1.normal.x + area0 * new_tri.v2.normal.x;
                                 const nory = area1 * new_tri.v0.normal.y + area2 * new_tri.v1.normal.y + area0 * new_tri.v2.normal.y;
                                 const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
-                                const normal = Vec3.normalize(Vec3{.x = norx*w, .y = nory*w, .z = norz*w});
+                                const frag_normal = Vec3.normalize(Vec3{.x = norx*w, .y = nory*w, .z = norz*w});
 
-                                // const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
-                                // const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
-                                // const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
-                                // const world = Vec3{.x = worldx*w, .y = worldy*w, .z = worldz*w};
+                                const ao: f32 = 0.1;
 
-                                // const view_dir = Vec3.normalize(Vec3.sub(from, world));
-                                // const half_vector = Vec3.add(light_dir, view_dir);
+                                const func = zigimg.color.ScaleValue(f32);
+                                // Lion
+                                // const albedo_map = albedo_tex.pixels.rgb48[tex_v * albedo_tex.width + tex_u].to.float4();
+                                // const normal_map = normal_tex.pixels.rgb48[tex_v * normal_tex.width + tex_u].to.float4();
+                                // const metallic = func(metal_tex.pixels.grayscale16[tex_v * metal_tex.width + tex_u].value);
+                                // const roughness = func(roughness_tex.pixels.grayscale16[tex_v * roughness_tex.width + tex_u].value);
+                                // Sphere
+                                // const albedo_map = albedo_tex.pixels.rgba32[tex_v * albedo_tex.width + tex_u].to.float4();
+                                // const normal_map = normal_tex.pixels.rgb24[tex_v * normal_tex.width + tex_u].to.float4();
+                                // const metallic = func(metal_tex.pixels.grayscale8[tex_v * metal_tex.width + tex_u].value);
+                                // const roughness = func(roughness_tex.pixels.grayscale8[tex_v * roughness_tex.width + tex_u].value);
+                                // Camera
+                                const albedo_map = albedo_tex.pixels.rgb24[tex_v * albedo_tex.width + tex_u].to.float4();
+                                const normal_map = normal_tex.pixels.rgb24[tex_v * normal_tex.width + tex_u].to.float4();
+                                const metallic = func(metal_tex.pixels.grayscale8[tex_v * metal_tex.width + tex_u].value);
+                                const roughness = func(roughness_tex.pixels.grayscale8[tex_v * roughness_tex.width + tex_u].value);
+                                var albedo = Vec3{.x = albedo_map[0], .y = albedo_map[1], .z = albedo_map[2]};
+                                albedo = albedo.pow(Vec3.init(2.2));
 
-                                // const distance:f32 = 1000000000.0;// length(from - world)
-                                // const attenuation = 1/distance;
-                                // const radiance = Vec3.multf(Vec3{.x = 1.0, .y = 1.0, .z = 1.0}, attenuation); // light_col * attenuation
+                                var normal = Vec3.normalize(Vec3{.x = normal_map[0] * 2.0 - 1.0, .y = normal_map[1] * 2.0 - 1.0, .z = normal_map[2] * 2.0 - 1.0});
+                                normal = Vec3.add(
+                                	Vec3.multf(tangent, normal.x),
+                                 	Vec3.add(Vec3.multf(bitangent, normal.y), Vec3.multf(frag_normal, normal.z))
+                                );
+                                normal = Vec3.normalize(normal);
 
+                                const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
+                                const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
+                                const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
+                                const world = Vec3{.x = worldx*w, .y = worldy*w, .z = worldz*w};
 
-                                // var albedo: [3]f32 = .{1.0, 1.0, 1.0};
+                                const light_dir = Vec3.normalize(Vec3.sub(light_pos, world));
+                                const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
+                                const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
 
-                                const pong = @max(0.0, Vec3.dot(normal, light_dir));
+                                const distance:f32 = Vec3.getLength(Vec3.sub(light_pos, world));
+                                const attenuation = 1.0/(distance*distance);
+                                const radiance = Vec3.multf(Vec3.init(1.0), attenuation);
 
-                                // albedo[0] = world.x;
-                                // albedo[1] = world.y;
-                                // albedo[2] = world.z;
+                                var f0 = Vec3{.x = 0.04, .y = 0.04, .z = 0.04};
+                                f0 = Vec3.mix(f0, albedo, metallic);
+                                const fresnel: Vec3  = fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
 
-                                albedo[0] *= pong;
-                                albedo[1] *= pong;
-                                albedo[2] *= pong;
+                                const normal_distr: f32 = normalDistributionGGX(normal, half_vec, roughness);
+                                const geometryS: f32   = geometrySmith(normal, view_dir, light_dir, roughness);
 
-                                frame_buffer.putPixel(x, y, Color{ .r = @floatCast(albedo[0]), .g = @floatCast(albedo[1]), .b = @floatCast(albedo[2]) });
+                                const numerator:Vec3    = fresnel.multf(geometryS * normal_distr);
+                                const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
+                                const specular:Vec3     = numerator.multf(1 / denominator);
+
+                                const kS:Vec3 = fresnel;
+                                var kD:Vec3 = Vec3.init(1.0).sub(kS);
+
+                                kD = kD.multf(1.0 - metallic);
+
+                                const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+                                // const Lo: Vec3 = kD.multv(albedo.multf(1.0/std.math.pi)).add(specular).multv(radiance).multf(NdotL);
+                                // const Lo:f32 = (kD * albedo / std.math.pi + specular) * radiance * NdotL;
+                                const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0/std.math.pi));
+                                const Lo2 = Vec3.add(Lo1, specular);
+                                const Lo = Vec3.multv(Lo2, radiance).multf(NdotL);
+                                const ambient = Vec3.init(0.03).multv(albedo).multf(ao);// * albedo * ao;
+                                var color   = Vec3.add(ambient, Lo);
+                                color = color.divv(color.add(Vec3.init(1.0)));
+                                // color = color.multV(1 / (Vec3.init(1.0)).add(color));
+                                // color = pow(color, vec3(1.0/2.2));
+                                color = color.pow(Vec3.init(1.0/2.2));
+
+                                // color.x = newTan1.x;
+                                // color.y = newTan1.y;
+                                // color.z = newTan1.z;
+
+                                frame_buffer.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) });
                             }
                         }
                         w_x0 += dy0;
