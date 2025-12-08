@@ -6,13 +6,13 @@ pub const Color = struct { r: f16, g: f16, b: f16 };
 pub const RenderTargetR16 = struct {
     width: u32,
     height: u32,
-    buffer: []f32,
+    buffer: []f16,
     allocator: std.mem.Allocator,
 
     pub fn create(_allocator: std.mem.Allocator, _width: u32, _height: u32) RenderTargetR16 {
-        var _buffer: []f32 = undefined;
+        var _buffer: []f16 = undefined;
 
-        if (_allocator.alloc(f32, _width * _height)) |_buf| {
+        if (_allocator.alloc(f16, _width * _height)) |_buf| {
             _buffer = _buf;
         } else |err| {
             std.debug.print("error: {any}", .{err});
@@ -30,15 +30,15 @@ pub const RenderTargetR16 = struct {
         self.allocator.free(self.buffer);
     }
 
-    pub fn putPixel(self: *RenderTargetR16, x: u32, y: u32, value: f32) void {
+    pub fn putPixel(self: *RenderTargetR16, x: u32, y: u32, value: f16) void {
         self.buffer[y * self.width + x] = value;
     }
 
-    pub fn getPixel(self: *RenderTargetR16, x: u32, y: u32) f32 {
+    pub fn getPixel(self: *RenderTargetR16, x: u32, y: u32) f16 {
         return self.buffer[y * self.width + x];
     }
 
-    pub fn clearColor(self: *RenderTargetR16, value: f32) void {
+    pub fn clearColor(self: *RenderTargetR16, value: f16) void {
         @memset(self.buffer, value);
     }
 };

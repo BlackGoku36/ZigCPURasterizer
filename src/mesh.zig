@@ -262,10 +262,12 @@ pub const Meshes = struct {
                             //     .type = .Directional,
                             // });
                         } else if (light.type == .point) {
+                            std.debug.print("light color: {} {} {}\n", .{ light.color[0], light.color[1], light.color[2] });
+                            std.debug.print("light intensity: {}\n", .{light.intensity});
                             try lights.append(allocator, Light{
                                 .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
                                 .pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] },
-                                .intensity = 1.5, //light.intensity,
+                                .intensity = 1.0,
                                 .range = 10.0, //light.range,
                                 .type = .Point,
                             });
@@ -318,6 +320,23 @@ pub const Meshes = struct {
                     try traverseGLTFNodes(gltf, binary, node, &meshes, allocator);
                 }
             }
+        }
+        if (cameras.items.len == 0) {
+            const pos = Vec3{ .x = 2.0, .y = 2.0, .z = 2.0 };
+            try cameras.append(allocator, Camera{
+                .fov = 45.0,
+                .pos = pos,
+                .view_matrix = Matrix4.lookAt(pos, Vec3.init(0.0), Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 }),
+            });
+        }
+        if (lights.items.len == 0) {
+            try lights.append(allocator, Light{
+                .color = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 },
+                .pos = Vec3.normalize(Vec3.sub(Vec3.init(1.0), Vec3.init(0.0))),
+                .intensity = 1.0, //light.intensity,
+                .range = 10.0, //light.range,
+                .type = .Directional,
+            });
         }
         return Meshes{
             .meshes = meshes,

@@ -47,15 +47,15 @@ pub const TexturePBR = struct {
         // TODO: we are assume the roughness/metallic textures are present by unwrapping it blindly
 
         if (desc.roughness_tex_path != null and desc.metallic_tex_path != null) {
-            if (std.mem.eql(u8, desc.roughness_tex_path.?, desc.metallic_tex_path.?)) {
-                return loadARMTextureFromDescriptor(desc, allocator);
-            } else {
-                if (desc.occlusion_tex_path) |_| {
-                    return loadSeperateTextureFromDescriptorAO(desc, allocator);
-                } else {
-                    return loadSeperateTextureFromDescriptor(desc, allocator);
-                }
-            }
+            // if (std.mem.eql(u8, desc.roughness_tex_path.?, desc.metallic_tex_path.?)) {
+            return loadRMTextureFromDescriptor(desc, allocator);
+            // } else {
+            // if (desc.occlusion_tex_path) |_| {
+            // return loadSeperateTextureFromDescriptorAO(desc, allocator);
+            // } else {
+            // return loadSeperateTextureFromDescriptor(desc, allocator);
+            // }
+            // }
         } else {
             return loadAlbedoTextureFromDescriptor(desc, allocator);
         }
@@ -312,11 +312,8 @@ pub const TexturePBR = struct {
             albedo_file = try std.fs.cwd().openFile(tex_desc.albedo_tex_path.?, .{});
         }
 
-        const albedo_tex = try zigimg.Image.fromFile(allocator, albedo_file, albedo_read_buffer[0..]);
-
-        const tex_format = albedo_tex.pixelFormat();
-        const bits_per_channel = tex_format.bitsPerChannel();
-        const channel_count = tex_format.channelCount();
+        var albedo_tex = try zigimg.Image.fromFile(allocator, albedo_file, albedo_read_buffer[0..]);
+        try albedo_tex.convert(allocator, zigimg.PixelFormat.rgb24);
 
         var _buffer: []PBR = undefined;
 
@@ -327,68 +324,18 @@ pub const TexturePBR = struct {
         }
 
         var index: usize = 0;
-        if (channel_count == 3) {
-            if (bits_per_channel == 8) {
-                for (albedo_tex.pixels.rgb24) |a| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    _buffer[index].metallic = 0.0;
-                    _buffer[index].roughness = 0.0;
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            } else {
-                for (albedo_tex.pixels.rgb48) |a| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    _buffer[index].metallic = 0.0;
-                    _buffer[index].roughness = 0.0;
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            }
-        } else if (channel_count == 4) {
-            if (bits_per_channel == 8) {
-                for (albedo_tex.pixels.rgba32) |a| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    _buffer[index].metallic = 0.0;
-                    _buffer[index].roughness = 0.0;
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            } else {
-                for (albedo_tex.pixels.rgba64) |a| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    _buffer[index].metallic = 0.0;
-                    _buffer[index].roughness = 0.0;
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            }
-        } else {
-            std.debug.panic("Format Not Found. Channels: {}, Bits per channel: {}\n", .{ channel_count, bits_per_channel });
+        for (albedo_tex.pixels.rgb24) |a| {
+            var albedo_value = a.to.float4();
+            albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
+            albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
+            albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
+            const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+            _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
+            _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
+            _buffer[index].metallic = 0.0;
+            _buffer[index].roughness = 0.0;
+            _buffer[index].ao = 0.1;
+            index += 1;
         }
 
         return TexturePBR{
@@ -428,16 +375,16 @@ pub const TexturePBR = struct {
             rm_file = try std.fs.cwd().openFile(tex_desc.roughness_tex_path.?, .{});
         }
 
-        const albedo_tex = try zigimg.Image.fromFile(allocator, albedo_file, albedo_read_buffer[0..]);
-        const normal_tex = try zigimg.Image.fromFile(allocator, normal_file, normal_read_buffer[0..]);
-        const rm_tex = try zigimg.Image.fromFile(allocator, rm_file, rm_read_buffer[0..]);
+        var albedo_tex = try zigimg.Image.fromFile(allocator, albedo_file, albedo_read_buffer[0..]);
+        var normal_tex = try zigimg.Image.fromFile(allocator, normal_file, normal_read_buffer[0..]);
+        var rm_tex = try zigimg.Image.fromFile(allocator, rm_file, rm_read_buffer[0..]);
+
+        try albedo_tex.convert(allocator, zigimg.PixelFormat.rgb24);
+        try normal_tex.convert(allocator, zigimg.PixelFormat.rgb24);
+        try rm_tex.convert(allocator, zigimg.PixelFormat.rgb24);
 
         std.debug.assert(albedo_tex.width == rm_tex.width and rm_tex.width == normal_tex.width);
         std.debug.assert(albedo_tex.height == rm_tex.height and rm_tex.height == normal_tex.height);
-
-        const tex_format = albedo_tex.pixelFormat();
-        const bits_per_channel = tex_format.bitsPerChannel();
-        const channel_count = tex_format.channelCount();
 
         var _buffer: []PBR = undefined;
 
@@ -448,56 +395,25 @@ pub const TexturePBR = struct {
         }
 
         var index: usize = 0;
-        if (channel_count == 3) {
-            if (bits_per_channel == 8) {
-                for (albedo_tex.pixels.rgb24, normal_tex.pixels.rgb24, rm_tex.pixels.rgb24) |a, n, rm| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal_value = n.to.float4();
-                    const roughness_value = rm.to.float4()[0];
-                    const metal_value = rm.to.float4()[1];
-                    var normal = Vec3{ .x = normal_value[0], .y = normal_value[1], .z = normal_value[2] };
-                    normal = Vec3.sub(normal.multf(2.0), Vec3.init(1.0));
-                    normal = normal.multf(tex_desc.normal_scale);
-                    normal = Vec3.normalize(normal);
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    // _buffer[index].normal.x = _buffer[index].normal.x * 2.0 - 1.0;
-                    // _buffer[index].normal.y = _buffer[index].normal.y * 2.0 - 1.0;
-                    // _buffer[index].normal.z = _buffer[index].normal.z * 2.0 - 1.0;
-                    _buffer[index].metallic = @floatCast(metal_value);
-                    _buffer[index].roughness = @floatCast(roughness_value);
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            } else {
-                for (albedo_tex.pixels.rgb48, normal_tex.pixels.rgb48, rm_tex.pixels.rgb48) |a, n, rm| {
-                    var albedo_value = a.to.float4();
-                    albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
-                    albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
-                    albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
-                    const normal_value = n.to.float4();
-                    const roughness_value = rm.to.float4()[0];
-                    const metal_value = rm.to.float4()[1];
-                    var normal = Vec3{ .x = normal_value[0], .y = normal_value[1], .z = normal_value[2] };
-                    normal = Vec3.sub(normal.multf(2.0), Vec3.init(1.0));
-                    normal = normal.multf(tex_desc.normal_scale);
-                    normal = Vec3.normalize(normal);
-                    _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
-                    _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    // _buffer[index].normal.x = _buffer[index].normal.x * 2.0 - 1.0;
-                    // _buffer[index].normal.y = _buffer[index].normal.y * 2.0 - 1.0;
-                    // _buffer[index].normal.z = _buffer[index].normal.z * 2.0 - 1.0;
-                    _buffer[index].metallic = @floatCast(metal_value);
-                    _buffer[index].roughness = @floatCast(roughness_value);
-                    _buffer[index].ao = 0.1;
-                    index += 1;
-                }
-            }
-        } else {
-            std.debug.panic("Format Not Found. Channels: {}, Bits per channel: {}\n", .{ channel_count, bits_per_channel });
+
+        for (albedo_tex.pixels.rgb24, normal_tex.pixels.rgb24, rm_tex.pixels.rgb24) |a, n, rm| {
+            var albedo_value = a.to.float4();
+            albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
+            albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
+            albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
+            const roughness_value = rm.to.float4()[1];
+            const metal_value = rm.to.float4()[2];
+            const normal_value = n.to.float4();
+            var normal = Vec3{ .x = normal_value[0], .y = normal_value[1], .z = normal_value[2] };
+            normal = Vec3.sub(normal.multf(2.0), Vec3.init(1.0));
+            normal = normal.multf(tex_desc.normal_scale);
+            normal = Vec3.normalize(normal);
+            _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
+            _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
+            _buffer[index].metallic = @floatCast(metal_value);
+            _buffer[index].roughness = @floatCast(roughness_value);
+            _buffer[index].ao = 0.1;
+            index += 1;
         }
 
         return TexturePBR{

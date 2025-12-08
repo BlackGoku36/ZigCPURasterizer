@@ -268,7 +268,8 @@ fn triClipToNDC(tri: Tri) Tri {
 
 fn fresnelSchlick(f0: Vec3, cosTheta: f32) Vec3 {
     // F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-    const c = std.math.pow(f32, std.math.clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+    // return F0 + (1.0 - F0)*pow((1.0 + 0.000001/*avoid negative approximation when cosTheta = 1*/) - cosTheta, 5.0);
+    const c = std.math.pow(f32, 1.0 + 0.000001 - cosTheta, 5.0);
     return Vec3{
         .x = f0.x + (1.0 - f0.x) * c,
         .y = f0.y + (1.0 - f0.y) * c,
@@ -375,14 +376,14 @@ pub fn init() !void {
     meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
-    const c = meshes.cameras.items[1];
+    const c = meshes.cameras.items[0];
     camera_pos = c.pos;
     view_mat = c.view_matrix;
     projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 50.0);
 }
 
 pub fn render(_: f32) !void {
-    frame_buffer.clearColor(0.0);
+    frame_buffer.clearColor(0.2);
     depth_buffer.clearColor(1.0);
 
     // const rot_mat = Matrix4.rotateY(theta);
@@ -533,29 +534,17 @@ pub fn render(_: f32) !void {
                                     var ao: f32 = undefined;
 
                                     if (active_material.type == .Textured) {
-                                        // if (false) {
                                         var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
                                         var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
 
                                         u *= w;
                                         v *= w;
 
-                                        // u = std.math.clamp(u, 0.0, 1.0);
-                                        // v = std.math.clamp(v, 0.0, 1.0);
-
-                                        // u %= @floatFromInt(active_material.pbr_texture.?.width);
-                                        // v %= @floatFromInt(active_material.pbr_texture.?.width);
                                         u = @mod(u, 1.0);
                                         v = @mod(v, 1.0);
 
-                                        // WHYYYYYYYYYYYYYY!!!!!!
-                                        // v = 1.0 - v;
-
                                         const tex_u: usize = @intFromFloat(u * @as(f32, @floatFromInt(active_material.pbr_texture.?.width)));
                                         const tex_v: usize = @intFromFloat(v * @as(f32, @floatFromInt(active_material.pbr_texture.?.height)));
-                                        //TODO: Modulo OK?
-                                        // tex_u %= active_material.pbr_texture.?.width;
-                                        // tex_v %= active_material.pbr_texture.?.height;
 
                                         const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
                                         const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
@@ -567,35 +556,26 @@ pub fn render(_: f32) !void {
                                         const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
                                         const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
 
-                                        // const ao: f32 = 0.1;
                                         const pbr = active_material.pbr_texture.?.buffer[tex_v * active_material.pbr_texture.?.width + tex_u];
                                         albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
-                                        const normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
+
+                                        var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
+                                        normal_map = Vec3.normalize(normal_map);
+
                                         metallic = @floatCast(pbr.metallic);
                                         roughness = @floatCast(pbr.roughness);
                                         ao = @floatCast(pbr.ao);
 
                                         normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
+                                        normal = Vec3.normalize(normal);
                                     } else {
                                         const pbr_solid = active_material.pbr_solid.?;
                                         albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
                                         normal = frag_normal;
                                         metallic = @floatCast(pbr_solid.metallic);
                                         roughness = @floatCast(pbr_solid.roughness);
-                                        // const pbr_solid = active_material.pbr_solid.?;
-                                        // albedo = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
-                                        // normal = frag_normal;
-                                        // metallic = 0.5;
-                                        // roughness = 0.5;
                                         ao = @floatCast(pbr_solid.ao);
                                     }
-
-                                    // normal = Vec3.multf(normal, -1.0);
-
-                                    // const albedo = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
-                                    // const normal = frag_normal;
-                                    // const metallic = 0.5;
-                                    // const roughness = 0.9;
 
                                     const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
                                     const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
@@ -605,34 +585,27 @@ pub fn render(_: f32) !void {
                                     const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
 
                                     var Lo: Vec3 = Vec3.init(0.0);
+                                    var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
+                                    f0 = Vec3.mix(f0, albedo, metallic);
 
                                     for (meshes.lights.items) |light| {
                                         var light_dir: Vec3 = Vec3.init(0.0);
-                                        var half_vec: Vec3 = Vec3.init(0.0);
-                                        // var distance = undefined;
                                         var radiance: Vec3 = Vec3.init(0.0);
 
                                         if (light.type == .Directional) {
                                             light_dir = Vec3.normalize(light.pos);
-                                            half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
-                                            // distance = Vec3.getLength(Vec3.sub(light.pos, world));
+                                            light_dir = Vec3.multf(light_dir, -1.0);
                                             radiance = light.color.multf(light.intensity);
                                         } else {
                                             light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
-                                            half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
                                             const distance = Vec3.getLength(Vec3.sub(light.pos, world));
-                                            // const attenuation = 5.0 / (distance * distance);
-                                            // attenuation = max( min( 1.0 - ( current_distance / range )4, 1 ), 0 ) / current_distance2
-                                            const attenuation = @max(@min(1.0 - std.math.pow(f32, distance / light.range, 4.0), 1.0), 0.0) / std.math.pow(f32, distance, 2);
+                                            const attenuation = 1.0 / (distance * distance + 1.0);
 
-                                            radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
+                                            radiance = Vec3.multf(light.color, attenuation);
                                         }
-                                        // radiance.x = std.math.clamp(radiance.x, 0.0, 1.0);
-                                        // radiance.y = std.math.clamp(radiance.y, 0.0, 1.0);
-                                        // radiance.z = std.math.clamp(radiance.z, 0.0, 1.0);
 
-                                        var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
-                                        f0 = Vec3.mix(f0, albedo, metallic);
+                                        const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
+
                                         const fresnel: Vec3 = fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
 
                                         const normal_distr: f32 = normalDistributionGGX(normal, half_vec, roughness);
@@ -648,22 +621,14 @@ pub fn render(_: f32) !void {
                                         kD = kD.multf(1.0 - metallic);
 
                                         const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
-                                        // const Lo: Vec3 = kD.multv(albedo.multf(1.0/std.math.pi)).add(specular).multv(radiance).multf(NdotL);
-                                        // const Lo:f32 = (kD * albedo / std.math.pi + specular) * radiance * NdotL;
                                         const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
                                         const Lo2 = Vec3.add(Lo1, specular);
                                         Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
                                     }
-                                    const ambient = Vec3.init(0.03).multv(albedo).multf(ao); // * albedo * ao;
+                                    const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
                                     var color = Vec3.add(ambient, Lo);
                                     color = color.divv(color.add(Vec3.init(1.0)));
-                                    // color = color.multV(1 / (Vec3.init(1.0)).add(color));
-                                    // color = pow(color, vec3(1.0/2.2));
                                     color = color.pow(Vec3.init(1.0 / 2.2));
-
-                                    // color.x = normal.x;
-                                    // color.y = normal.y;
-                                    // color.z = normal.z;
 
                                     frame_buffer.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) });
                                 }
