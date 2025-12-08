@@ -4,7 +4,11 @@
         .hash = "sokol-0.1.0-pb1HK2UALwBzuEoUMfpWEBnftilm-KFC09TgHPtxlPSR",
     },
     .zigimg = .{
-            .url = "git+https://github.com/zigimg/zigimg.git#f5783e87627cbd9e0b45fad112e9f73503914f36",
-            .hash = "zigimg-0.1.0-8_eo2vBrFQBhsrLpexdcDQY-zrlzkyFZfKuYX-Nry6KN",
+        .url = "git+https://github.com/zigimg/zigimg.git#f5783e87627cbd9e0b45fad112e9f73503914f36",
+        .hash = "zigimg-0.1.0-8_eo2vBrFQBhsrLpexdcDQY-zrlzkyFZfKuYX-Nry6KN",
+    },
+    .zgltf = .{
+            .url = "git+https://github.com/kooparse/zgltf#ec52d477db346af99d4cdced4e35e67e1670023f",
+            .hash = "zgltf-0.1.0-sX6QAt0SAgDzMQCCG-N181hVbx8JnwFYZ3luQigQpVBM",
         },
 }, .minimum_zig_version = "0.15.1", .fingerprint = 0x963bce155f96c8a5, .paths = .{ "build.zig", "build.zig.zon", "src" } }

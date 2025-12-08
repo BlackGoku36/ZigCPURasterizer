@@ -2,37 +2,41 @@ const std = @import("std");
 const sokol = @import("sokol");
 
 pub fn build(b: *std.Build) !void {
-	const target = b.standardTargetOptions(.{});
-	const optimization = b.standardOptimizeOption(.{});
+    const target = b.standardTargetOptions(.{});
+    const optimization = b.standardOptimizeOption(.{});
 
-	const sokol_dep = b.dependency("sokol", .{
-		.target = target,
-		.optimize = optimization,
-	});
-	const sokol_module = sokol_dep.module("sokol");
+    const sokol_dep = b.dependency("sokol", .{
+        .target = target,
+        .optimize = optimization,
+    });
+    const sokol_module = sokol_dep.module("sokol");
 
-	const zigimg_dep = b.dependency("zigimg", .{
-		.target = target,
-		.optimize = optimization,
-	});
-	const zigimg_module = zigimg_dep.module("zigimg");
+    const zigimg_dep = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimization,
+    });
+    const zigimg_module = zigimg_dep.module("zigimg");
 
-	const exe = b.addExecutable(.{
-		.name = "ZigCPURasterizer",
-		.root_module = b.createModule(.{
-			.root_source_file = b.path("src/main.zig"),
-			.imports = &.{
-				.{.name = "sokol", .module = sokol_module},
-				.{.name = "zigimg", .module = zigimg_module},
-				.{.name = "shader", .module = try createShaderModule(b, sokol_dep, sokol_module) },
-			},
-			.target = target,
-			.optimize = optimization,
-		}),
-	});
+    const zgltf = b.dependency("zgltf", .{});
+    const zgltf_module = zgltf.module("zgltf");
 
-	b.installArtifact(exe);
-	const run = b.addRunArtifact(exe);
+    const exe = b.addExecutable(.{
+        .name = "ZigCPURasterizer",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .imports = &.{
+                .{ .name = "sokol", .module = sokol_module },
+                .{ .name = "zigimg", .module = zigimg_module },
+                .{ .name = "shader", .module = try createShaderModule(b, sokol_dep, sokol_module) },
+                .{ .name = "zgltf", .module = zgltf_module },
+            },
+            .target = target,
+            .optimize = optimization,
+        }),
+    });
+
+    b.installArtifact(exe);
+    const run = b.addRunArtifact(exe);
     b.step("run", "Run pacman").dependOn(&run.step);
 }
 
