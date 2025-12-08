@@ -382,9 +382,13 @@ pub fn init() !void {
     projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 50.0);
 }
 
-pub fn render(_: f32) !void {
+pub fn render(_: f32, camera: usize) !void {
     frame_buffer.clearColor(0.2);
     depth_buffer.clearColor(1.0);
+
+    const cam = meshes.cameras.items[camera % meshes.cameras.items.len];
+    camera_pos = cam.pos;
+    view_mat = cam.view_matrix;
 
     // const rot_mat = Matrix4.rotateY(theta);
     for (meshes.meshes.items) |mesh| {
@@ -601,7 +605,7 @@ pub fn render(_: f32) !void {
                                             const distance = Vec3.getLength(Vec3.sub(light.pos, world));
                                             const attenuation = 1.0 / (distance * distance + 1.0);
 
-                                            radiance = Vec3.multf(light.color, attenuation);
+                                            radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
                                         }
 
                                         const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));

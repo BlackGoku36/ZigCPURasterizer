@@ -44,7 +44,7 @@ export fn init() void {
     const db_img_desc: sg.ImageDesc = .{
         .width = rasterizer.width,
         .height = rasterizer.height,
-        .pixel_format = sg.PixelFormat.R16F,
+        .pixel_format = sg.PixelFormat.R32F,
         .usage = .{ .stream_update = true },
     };
 
@@ -109,6 +109,7 @@ var min_time: i64 = 1000000;
 var max_time: i64 = 0;
 var min_avg_time: f64 = 10000000.0;
 var max_avg_time: f64 = 0.0;
+var camera_idx: usize = 0;
 
 export fn frame() void {
     if (num_frames == 1000) {
@@ -125,7 +126,7 @@ export fn frame() void {
     const theta = normalized_time * (360 * to_rad);
 
     const time_0 = std.time.milliTimestamp();
-    rasterizer.render(theta) catch |err| {
+    rasterizer.render(theta, camera_idx) catch |err| {
         std.debug.print("error: {any}", .{err});
     };
     const time_1 = std.time.milliTimestamp();
@@ -157,10 +158,10 @@ export fn frame() void {
     const avg_time: f64 = @as(f64, @floatFromInt(time_accum)) / @as(f64, @floatFromInt(num_frames));
     const window_title = std.fmt.bufPrintZ(&buffer, "ZigCPURasterizer | {d} ms | Avg {d:.5} ms", .{ interval, avg_time }) catch "ZigCPURasterizer";
     sapp.setWindowTitle(window_title);
-    if(interval < min_time) min_time = interval;
-    if(interval > max_time) max_time = interval;
-    if(avg_time < min_avg_time) min_avg_time = avg_time;
-    if(avg_time > max_avg_time and avg_time != std.math.inf(f64) and num_frames > 30) max_avg_time = avg_time;
+    if (interval < min_time) min_time = interval;
+    if (interval > max_time) max_time = interval;
+    if (avg_time < min_avg_time) min_avg_time = avg_time;
+    if (avg_time > max_avg_time and avg_time != std.math.inf(f64) and num_frames > 30) max_avg_time = avg_time;
     num_frames += 1;
 }
 
@@ -170,9 +171,9 @@ export fn input(ev: ?*const sapp.Event) void {
         .KEY_DOWN => {
             switch (event.key_code) {
                 .Q, .ESCAPE => {
-                 	std.debug.print("Frame Time (Min - Max): {d} - {d}\n", .{min_time, max_time});
-                  	std.debug.print("Avg.  Time (Min - Max): {d:.5} - {d:.5}\n", .{min_avg_time, max_avg_time});
-                	sapp.requestQuit();
+                    std.debug.print("Frame Time (Min - Max): {d} - {d}\n", .{ min_time, max_time });
+                    std.debug.print("Avg.  Time (Min - Max): {d:.5} - {d:.5}\n", .{ min_avg_time, max_avg_time });
+                    sapp.requestQuit();
                 },
                 .SPACE => {
                     if (anim_play) {
@@ -180,6 +181,7 @@ export fn input(ev: ?*const sapp.Event) void {
                     } else {
                         anim_play = true;
                     }
+                    camera_idx += 1;
                 },
                 else => {},
             }

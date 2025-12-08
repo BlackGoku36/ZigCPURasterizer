@@ -267,7 +267,7 @@ pub const Meshes = struct {
                             try lights.append(allocator, Light{
                                 .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
                                 .pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] },
-                                .intensity = 1.0,
+                                .intensity = 1.2,
                                 .range = 10.0, //light.range,
                                 .type = .Point,
                             });
