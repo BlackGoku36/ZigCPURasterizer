@@ -17,7 +17,15 @@ pub const Material = struct {
     tex_coord: u8,
     name: []const u8,
 
-    pub fn fromGltfTextureFiles(diffuse_path: ?[]const u8, metalness_roughness_path: ?[]const u8, normal_path: ?[]const u8, allocator: std.mem.Allocator) Material {
+    pub fn fromGltfTextureFiles(
+        diffuse_path: ?[]const u8,
+        metalness_roughness_path: ?[]const u8,
+        normal_path: ?[]const u8,
+        emissive_path: ?[]const u8,
+        emissive_strength: f32,
+        normal_scale: f32,
+        allocator: std.mem.Allocator,
+    ) Material {
         var mat: TexturePBR = undefined;
         if (TexturePBR.loadTextureFromDescriptor(PBRTextureDescriptor{
             .albedo_tex_path = diffuse_path,
@@ -26,6 +34,9 @@ pub const Material = struct {
             .metallic_tex_path = metalness_roughness_path,
             // .occlusion_tex_path = occlusion_path,
             .occlusion_tex_path = null,
+            .emissive_tex_path = emissive_path,
+            .emissive_strength = emissive_strength,
+            .normal_scale = normal_scale,
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {

@@ -10,6 +10,7 @@ pub const PBR = struct {
     metallic: f16,
     roughness: f16,
     ao: f16,
+    emissive: RGB,
 };
 
 pub const PBRSolid = struct {
@@ -27,7 +28,9 @@ pub const PBRTextureDescriptor = struct {
     metallic_tex_path: ?[]const u8,
     roughness_tex_path: ?[]const u8,
     occlusion_tex_path: ?[]const u8,
-    normal_scale: f32 = 1.0,
+    emissive_tex_path: ?[]const u8,
+    emissive_strength: f32,
+    normal_scale: f32,
 };
 
 pub const PBRPackedTextureDescriptor = struct {
@@ -362,13 +365,14 @@ pub const TexturePBR = struct {
         std.debug.print("Normal file path: {s}\n", .{tex_desc.normal_tex_path.?});
         std.debug.print("Metallic file path: {s}\n", .{tex_desc.metallic_tex_path.?});
         std.debug.print("Roughness file path: {s}\n", .{tex_desc.roughness_tex_path.?});
-        std.debug.print("----\n", .{});
+        // std.debug.print("----\n", .{});
 
         // Assume all file paths are either absolute or relative
         if (std.fs.path.isAbsolute(tex_desc.albedo_tex_path.?)) {
             albedo_file = try std.fs.openFileAbsolute(tex_desc.albedo_tex_path.?, .{});
             normal_file = try std.fs.openFileAbsolute(tex_desc.normal_tex_path.?, .{});
             rm_file = try std.fs.openFileAbsolute(tex_desc.roughness_tex_path.?, .{});
+            // emissive_file = try std.fs.openFileAbsolute(tex_desc.emissive_tex_path.?, .{});
         } else {
             albedo_file = try std.fs.cwd().openFile(tex_desc.albedo_tex_path.?, .{});
             normal_file = try std.fs.cwd().openFile(tex_desc.normal_tex_path.?, .{});
@@ -407,7 +411,7 @@ pub const TexturePBR = struct {
             var normal = Vec3{ .x = normal_value[0], .y = normal_value[1], .z = normal_value[2] };
             normal = Vec3.sub(normal.multf(2.0), Vec3.init(1.0));
             normal = normal.multf(tex_desc.normal_scale);
-            normal = Vec3.normalize(normal);
+            // normal = Vec3.normalize(normal);
             _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
             _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
             _buffer[index].metallic = @floatCast(metal_value);
@@ -416,6 +420,52 @@ pub const TexturePBR = struct {
             index += 1;
         }
 
+        if (tex_desc.emissive_tex_path) |emissive_tex_path| {
+            std.debug.print("Emissive file path: {s}\n", .{emissive_tex_path});
+            var emissive_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+
+            var emissive_file: std.fs.File = undefined;
+            defer emissive_file.close();
+
+            if (std.fs.path.isAbsolute(tex_desc.albedo_tex_path.?)) {
+                emissive_file = try std.fs.openFileAbsolute(emissive_tex_path, .{});
+            } else {
+                emissive_file = try std.fs.cwd().openFile(emissive_tex_path, .{});
+            }
+
+            var emissive_tex = try zigimg.Image.fromFile(allocator, emissive_file, emissive_read_buffer[0..]);
+
+            std.debug.assert(albedo_tex.height == emissive_tex.height);
+
+            try emissive_tex.convert(allocator, zigimg.PixelFormat.rgb48);
+
+            index = 0;
+            for (emissive_tex.pixels.rgb48) |e| {
+                // var albedo_value = a.to.float4();
+                // albedo_value[0] = std.math.pow(f32, albedo_value[0], 2.2);
+                // albedo_value[1] = std.math.pow(f32, albedo_value[1], 2.2);
+                // albedo_value[2] = std.math.pow(f32, albedo_value[2], 2.2);
+                // const roughness_value = rm.to.float4()[1];
+                // const metal_value = rm.to.float4()[2];
+                // const normal_value = n.to.float4();
+                // var normal = Vec3{ .x = normal_value[0], .y = normal_value[1], .z = normal_value[2] };
+                // normal = Vec3.sub(normal.multf(2.0), Vec3.init(1.0));
+                // normal = normal.multf(tex_desc.normal_scale);
+                // normal = Vec3.normalize(normal);
+                // _buffer[index].albedo = RGB{ .x = @floatCast(albedo_value[0]), .y = @floatCast(albedo_value[1]), .z = @floatCast(albedo_value[2]) };
+                // _buffer[index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
+                // _buffer[index].metallic = @floatCast(metal_value);
+                // _buffer[index].roughness = @floatCast(roughness_value);
+                // _buffer[index].ao = 0.1;
+                const color = e.to.float4();
+                _buffer[index].emissive.x = @floatCast(color[0] * tex_desc.emissive_strength);
+                _buffer[index].emissive.y = @floatCast(color[1] * tex_desc.emissive_strength);
+                _buffer[index].emissive.z = @floatCast(color[2] * tex_desc.emissive_strength);
+                index += 1;
+            }
+        }
+
+        std.debug.print("----\n", .{});
         return TexturePBR{
             .width = albedo_tex.width,
             .height = albedo_tex.height,

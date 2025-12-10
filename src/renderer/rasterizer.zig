@@ -373,13 +373,20 @@ var view_mat: Matrix4 = undefined; //Matrix4.lookAt(camera_pos, to, up);
 pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("cannon_01_2k/cannon_01_2k.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
-    meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("cube_diorama/cube_diorama.gltf", allocator);
+    meshes = try Meshes.fromGLTFFile("junkshop/thejunkshopsplashscreen.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
     const c = meshes.cameras.items[0];
     camera_pos = c.pos;
     view_mat = c.view_matrix;
-    projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 50.0);
+    if (c.type == .Perspective) {
+        projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 50.0);
+    } else {
+        const adjusted_xmag = c.ymag * aspect_ratio;
+        projection_mat = Matrix4.orthogonalProjection(-adjusted_xmag, adjusted_xmag, c.ymag, -c.ymag, 0.1, 1000.0);
+    }
 }
 
 pub fn render(_: f32, camera: usize) !void {
@@ -392,6 +399,7 @@ pub fn render(_: f32, camera: usize) !void {
 
     // const rot_mat = Matrix4.rotateY(theta);
     for (meshes.meshes.items) |mesh| {
+        // if (std.mem.eql(u8, mesh.name, "Cube")) continue;
         // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
         const model_mat = mesh.transform;
 
@@ -430,11 +438,27 @@ pub fn render(_: f32, camera: usize) !void {
             const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
             const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
 
-            const mesh_uv = mesh.uvs[active_material.tex_coord];
+            // const norm1 = Vec3.normalize(Vec3.cross(Vec3.sub(vert1, vert2), Vec3.sub(vert1, vert3)));
+            // const norm2 = Vec3.normalize(Vec3.cross(Vec3.sub(vert2, vert3), Vec3.sub(vert2, vert1)));
+            // const norm3 = Vec3.normalize(Vec3.cross(Vec3.sub(vert3, vert1), Vec3.sub(vert3, vert2)));
 
-            const uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
-            const uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
-            const uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
+            const mesh_uv = mesh.uvs[active_material.tex_coord];
+            // std.debug.print("Active tex coord: {d}\n", .{active_material.tex_coord});
+            // std.debug.print("Index: {d} {d}\n", .{ idx1 * 2, mesh_uv.len });
+
+            //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
+            var uv1: Vec2 = undefined;
+            var uv2: Vec2 = undefined;
+            var uv3: Vec2 = undefined;
+            if (mesh_uv.len == 0) {
+                uv1 = Vec2{ .x = 0.5, .y = 0.5 };
+                uv2 = Vec2{ .x = 0.5, .y = 0.5 };
+                uv3 = Vec2{ .x = 0.5, .y = 0.5 };
+            } else {
+                uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
+                uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
+                uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
+            }
 
             const tan1 = calculateTangent(vert1, vert2, vert3, uv1, uv2, uv3);
             const tan2 = calculateTangent(vert2, vert3, vert1, uv2, uv3, uv1);
@@ -537,6 +561,8 @@ pub fn render(_: f32, camera: usize) !void {
                                     var roughness: f32 = undefined;
                                     var ao: f32 = undefined;
 
+                                    var emissive: Vec3 = Vec3.init(0.0);
+
                                     if (active_material.type == .Textured) {
                                         var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
                                         var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
@@ -569,6 +595,7 @@ pub fn render(_: f32, camera: usize) !void {
                                         metallic = @floatCast(pbr.metallic);
                                         roughness = @floatCast(pbr.roughness);
                                         ao = @floatCast(pbr.ao);
+                                        emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
 
                                         normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
                                         normal = Vec3.normalize(normal);
@@ -631,6 +658,7 @@ pub fn render(_: f32, camera: usize) !void {
                                     }
                                     const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
                                     var color = Vec3.add(ambient, Lo);
+                                    color = color.add(emissive);
                                     color = color.divv(color.add(Vec3.init(1.0)));
                                     color = color.pow(Vec3.init(1.0 / 2.2));
 

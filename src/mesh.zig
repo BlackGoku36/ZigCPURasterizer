@@ -36,23 +36,20 @@ pub const Light = struct {
     type: LightType,
 };
 
+pub const CameraType = enum { Perspective, Orthogonal };
+
 pub const Camera = struct {
     view_matrix: Matrix4,
     fov: f32,
     pos: Vec3,
+    type: CameraType,
+    xmag: f32 = 0.0,
+    ymag: f32 = 0.0,
 };
 
-pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
-    const m = gltf.data.meshes[node.mesh.?];
-
-    //TODO: Free this memory
-    const name = try allocator.alloc(u8, m.name.?.len);
-    @memcpy(name, m.name.?);
-    if (!std.mem.containsAtLeast(u8, node.name.?, 0, "decal")) {
-        return;
-    }
-
+pub fn getMatrixFromNode(node: Gltf.Node, parent_matrix: Matrix4) Matrix4 {
     var mat: Matrix4 = undefined;
+
     if (node.matrix) |transform| {
         mat.mat = transform;
     } else {
@@ -65,6 +62,21 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, meshes: *std.A
         mat = Matrix4.multMatrix4(Quat.mat4FromQuat(rot), scale);
         mat = Matrix4.multMatrix4(trans, mat);
     }
+
+    return Matrix4.multMatrix4(parent_matrix, mat);
+}
+
+pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix: Matrix4, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
+    const m = gltf.data.meshes[node.mesh.?];
+
+    //TODO: Free this memory
+    const name = try allocator.alloc(u8, m.name.?.len);
+    @memcpy(name, m.name.?);
+    if (!std.mem.containsAtLeast(u8, node.name.?, 0, "decal")) {
+        return;
+    }
+
+    const transform = getMatrixFromNode(node, parent_matrix);
 
     for (m.primitives) |p| {
         // TODO: primitives means subgroups of mesh and not entire mesh
@@ -111,28 +123,89 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, meshes: *std.A
                 },
             }
         }
+
+        const new_normals = try allocator.alloc(f32, normals.len);
+        allocator.free(normals);
+
+        var indices_len: usize = 0;
+        if (indices_16) |indice_16| {
+            indices_len = indice_16.len;
+        } else if (indices_32) |indice_32| {
+            indices_len = indice_32.len;
+        }
+        var i: usize = 0;
+        while (i < indices_len) : (i += 3) {
+            var idx1: usize = 0;
+            var idx2: usize = 0;
+            var idx3: usize = 0;
+            if (indices_16) |indice_16| {
+                idx1 = @intCast(indice_16[i]);
+                idx2 = @intCast(indice_16[i + 1]);
+                idx3 = @intCast(indice_16[i + 2]);
+            } else if (indices_32) |indice_32| {
+                idx1 = @intCast(indice_32[i]);
+                idx2 = @intCast(indice_32[i + 1]);
+                idx3 = @intCast(indice_32[i + 2]);
+            }
+
+            const vert1 = Vec3{ .x = vertices[idx1 * 3 + 0], .y = vertices[idx1 * 3 + 1], .z = vertices[idx1 * 3 + 2] };
+            const vert2 = Vec3{ .x = vertices[idx2 * 3 + 0], .y = vertices[idx2 * 3 + 1], .z = vertices[idx2 * 3 + 2] };
+            const vert3 = Vec3{ .x = vertices[idx3 * 3 + 0], .y = vertices[idx3 * 3 + 1], .z = vertices[idx3 * 3 + 2] };
+
+            const edge1 = Vec3.sub(vert1, vert2);
+            const edge2 = Vec3.sub(vert2, vert3);
+
+            const cross = Vec3.cross(edge1, edge2);
+
+            new_normals[idx1 * 3 + 0] += cross.x;
+            new_normals[idx2 * 3 + 0] += cross.x;
+            new_normals[idx3 * 3 + 0] += cross.x;
+
+            new_normals[idx1 * 3 + 1] += cross.y;
+            new_normals[idx2 * 3 + 1] += cross.y;
+            new_normals[idx3 * 3 + 1] += cross.y;
+
+            new_normals[idx1 * 3 + 2] += cross.z;
+            new_normals[idx2 * 3 + 2] += cross.z;
+            new_normals[idx3 * 3 + 2] += cross.z;
+        }
+
+        // var j: usize = 0;
+        // while (j < new_normals.len) : (j += 3) {
+        //     var n = Vec3{
+        //         .x = new_normals[j * 3 + 0],
+        //         .y = new_normals[j * 3 + 1],
+        //         .z = new_normals[j * 3 + 2],
+        //     };
+        //     n = n.normalize();
+        //     new_normals[j * 3 + 0] = n.x;
+        //     new_normals[j * 3 + 1] = n.y;
+        //     new_normals[j * 3 + 2] = n.z;
+        // }
         try meshes.append(allocator, Mesh{
             .vertices = vertices,
             .uvs = uvs,
-            .normals = normals,
+            .normals = new_normals,
             .indices_16 = indices_16,
             .indices_32 = indices_32,
             .name = name,
-            .transform = mat,
+            .transform = transform,
             .material = pbr_material_idx,
         });
     }
 }
 
-pub fn traverseGLTFNodes(gltf: Gltf, binary: []u8, node: Gltf.Node, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
+pub fn traverseGLTFNodes(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix: Matrix4, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
     const children = node.children;
+
+    const transform = getMatrixFromNode(node, parent_matrix);
 
     for (children) |child| {
         const child_node = gltf.data.nodes[child];
         if (child_node.mesh) |_| {
-            try getMeshFromNode(gltf, binary, child_node, meshes, allocator);
+            try getMeshFromNode(gltf, binary, child_node, transform, meshes, allocator);
         }
-        try traverseGLTFNodes(gltf, binary, child_node, meshes, allocator);
+        try traverseGLTFNodes(gltf, binary, child_node, transform, meshes, allocator);
     }
 }
 
@@ -141,39 +214,63 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     var metallic_rougness_texture_path: ?[]u8 = null;
     var normal_texture_path: ?[]u8 = null;
     var occlusion_texture_path: ?[]u8 = null;
+    var emissive_texture_path: ?[]u8 = null;
+
     if (material.metallic_roughness.base_color_texture) |color_texture| {
         const color_texture_idx = color_texture.index;
         const color_texture_source_idx = gltf.data.textures[color_texture_idx].source.?;
         const color_texture_uri = gltf.data.images[color_texture_source_idx].uri.?;
         color_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, color_texture_uri });
+        color_texture_path = std.Uri.percentDecodeInPlace(color_texture_path.?);
     }
     if (material.metallic_roughness.metallic_roughness_texture) |metallic_rougness_texture| {
         const texture_idx = metallic_rougness_texture.index;
         const metallic_rougness_texture_source_idx = gltf.data.textures[texture_idx].source.?;
         const metallic_rougness_texture_uri = gltf.data.images[metallic_rougness_texture_source_idx].uri.?;
         metallic_rougness_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, metallic_rougness_texture_uri });
+        metallic_rougness_texture_path = std.Uri.percentDecodeInPlace(metallic_rougness_texture_path.?);
     }
+
+    var normal_strength: f32 = 1.0;
     if (material.normal_texture) |normal_texture| {
         const texture_idx = normal_texture.index;
         const normal_texture_source_idx = gltf.data.textures[texture_idx].source.?;
         const normal_texture_uri = gltf.data.images[normal_texture_source_idx].uri.?;
         normal_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, normal_texture_uri });
+        normal_texture_path = std.Uri.percentDecodeInPlace(normal_texture_path.?);
+        normal_strength = normal_texture.scale;
     }
     if (material.occlusion_texture) |occlusion_texture| {
         const texture_idx = occlusion_texture.index;
         const occlusion_texture_source_idx = gltf.data.textures[texture_idx].source.?;
         const occlusion_texture_uri = gltf.data.images[occlusion_texture_source_idx].uri.?;
         occlusion_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, occlusion_texture_uri });
+        occlusion_texture_path = std.Uri.percentDecodeInPlace(occlusion_texture_path.?);
+    }
+    if (material.emissive_texture) |emissive_texture| {
+        const texture_idx = emissive_texture.index;
+        const emissive_texture_source_idx = gltf.data.textures[texture_idx].source.?;
+        const emissive_texture_uri = gltf.data.images[emissive_texture_source_idx].uri.?;
+        emissive_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, emissive_texture_uri });
+        emissive_texture_path = std.Uri.percentDecodeInPlace(emissive_texture_path.?);
     }
     std.debug.print("Has Color Texture: {}\n", .{color_texture_path != null});
     std.debug.print("Has Metallic-Roughness Texture: {}\n", .{metallic_rougness_texture_path != null});
     std.debug.print("Has Normal Texture: {}\n", .{normal_texture_path != null});
     std.debug.print("Has Occlusion Texture: {}\n", .{occlusion_texture_path != null});
+    std.debug.print("Has Emissive Texture: {}\n", .{emissive_texture_path != null});
+
+    // if (material.normal_texture) |tex| {
+    // normal_strength = tex.scale;
+    // }
 
     var pbr_material = PBRMaterial.fromGltfTextureFiles(
         color_texture_path,
         metallic_rougness_texture_path,
         normal_texture_path,
+        emissive_texture_path,
+        material.emissive_strength,
+        normal_strength,
         allocator,
     );
 
@@ -213,7 +310,7 @@ pub const Meshes = struct {
         defer allocator.free(bin_path);
         std.debug.print("Binary Path: {s}\n", .{bin_path});
 
-        const binary = std.fs.cwd().readFileAllocOptions(allocator, bin_path, 14_00_00_001, null, std.mem.Alignment.@"4", null) catch |err| {
+        const binary = std.fs.cwd().readFileAllocOptions(allocator, bin_path, 54_00_00_001, null, std.mem.Alignment.@"4", null) catch |err| {
             std.debug.print("Couldn't open glTF's binary file {s} : {any}\n", .{ bin_path, err });
             return err;
         };
@@ -245,8 +342,11 @@ pub const Meshes = struct {
             if (scene.nodes) |root_nodes| {
                 for (root_nodes) |root_node| {
                     const node = gltf.data.nodes[root_node];
+
+                    const matrix = Matrix4.getIdentity();
+
                     if (node.mesh) |_| {
-                        try getMeshFromNode(gltf, binary, node, &meshes, allocator);
+                        try getMeshFromNode(gltf, binary, node, matrix, &meshes, allocator);
                     } else if (node.light) |light_idx| {
                         // const light_pos = node.translation;
                         const light = gltf.data.lights[light_idx];
@@ -267,8 +367,8 @@ pub const Meshes = struct {
                             try lights.append(allocator, Light{
                                 .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
                                 .pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] },
-                                .intensity = 1.2,
-                                .range = 10.0, //light.range,
+                                .intensity = light.intensity * 0.0001,
+                                .range = light.range,
                                 .type = .Point,
                             });
                         } else {
@@ -281,27 +381,35 @@ pub const Meshes = struct {
                         const camera = gltf.data.cameras[camera_idx];
                         const pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] };
                         var fov: f32 = 0.0;
+                        var xmag: f32 = 0.0;
+                        var ymag: f32 = 0.0;
+                        var camera_type: CameraType = undefined;
 
                         switch (camera.type) {
                             .perspective => |p| {
                                 fov = p.yfov;
-                                // aspect_ratio = p.aspect_ratio.?;
+                                camera_type = .Perspective;
                             },
-                            .orthographic => {
-                                std.debug.panic("Orthographic Projection Not Implemented!\n", .{});
+                            .orthographic => |o| {
+                                camera_type = .Orthogonal;
+                                xmag = o.xmag;
+                                ymag = o.ymag;
                             },
                         }
 
                         std.debug.print("Camera name: {s}\n", .{node.name.?});
 
-                        if (node.matrix) |matrix| {
+                        if (node.matrix) |mat| {
                             var view_mat = Matrix4.getIdentity();
-                            view_mat.mat = matrix;
+                            view_mat.mat = mat;
                             view_mat.print();
                             try cameras.append(allocator, Camera{
                                 .view_matrix = view_mat,
                                 .fov = fov,
                                 .pos = pos,
+                                .xmag = xmag,
+                                .ymag = ymag,
+                                .type = camera_type,
                             });
                         } else {
                             const rot = Quat{ .c = Vec3{ .x = node.rotation[0], .y = node.rotation[1], .z = node.rotation[2] }, .r = node.rotation[3] };
@@ -314,10 +422,14 @@ pub const Meshes = struct {
                                 .view_matrix = view_mat,
                                 .fov = fov,
                                 .pos = pos,
+                                .xmag = xmag,
+                                .ymag = ymag,
+                                .type = camera_type,
                             });
                         }
                     }
-                    try traverseGLTFNodes(gltf, binary, node, &meshes, allocator);
+
+                    try traverseGLTFNodes(gltf, binary, node, matrix, &meshes, allocator);
                 }
             }
         }
@@ -327,15 +439,18 @@ pub const Meshes = struct {
                 .fov = 45.0,
                 .pos = pos,
                 .view_matrix = Matrix4.lookAt(pos, Vec3.init(0.0), Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 }),
+                .type = .Perspective,
             });
         }
         if (lights.items.len == 0) {
             try lights.append(allocator, Light{
                 .color = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 },
-                .pos = Vec3.normalize(Vec3.sub(Vec3.init(1.0), Vec3.init(0.0))),
+                .pos = Vec3.init(0.0),
+                // .pos = Vec3.normalize(Vec3.sub(Vec3.init(1.0), Vec3.init(0.0))),
                 .intensity = 1.0, //light.intensity,
                 .range = 10.0, //light.range,
-                .type = .Directional,
+                // .type = .Directional,
+                .type = .Point,
             });
         }
         return Meshes{

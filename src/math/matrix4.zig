@@ -166,7 +166,7 @@ pub const Matrix4 = struct {
     }
 
     pub fn orthogonalProjection(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Matrix4 {
-        var out_mat: Matrix4 = comptime getZero();
+        var out_mat: Matrix4 = comptime getIdentity();
 
         const rl = right - left;
         const tb = top - bottom;
