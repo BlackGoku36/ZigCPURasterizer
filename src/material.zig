@@ -30,9 +30,9 @@ pub const Material = struct {
         if (TexturePBR.loadTextureFromDescriptor(PBRTextureDescriptor{
             .albedo_tex_path = diffuse_path,
             .normal_tex_path = normal_path,
-            .roughness_tex_path = metalness_roughness_path,
             .metallic_tex_path = metalness_roughness_path,
-            // .occlusion_tex_path = occlusion_path,
+            .roughness_tex_path = metalness_roughness_path,
+            //TODO: It doesn't support AO even when material have AO Map
             .occlusion_tex_path = null,
             .emissive_tex_path = emissive_path,
             .emissive_strength = emissive_strength,
@@ -40,7 +40,7 @@ pub const Material = struct {
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {
-            std.debug.print("Error while creating Material: {}\n", .{err});
+            std.debug.panic("Error while creating Material: {}\n", .{err});
         }
 
         return Material{
@@ -52,13 +52,14 @@ pub const Material = struct {
         };
     }
 
-    pub fn fromGltfConstants(name: []const u8, rgb: [3]f32, metallic: f32, roughness: f32, ao: f32) Material {
+    pub fn fromGltfConstants(name: []const u8, rgb: [3]f32, metallic: f32, roughness: f32, ao: f32, emissive_rgb: [3]f32) Material {
         return Material{
             .pbr_solid = PBRSolid{
                 .albedo = RGB{ .x = @floatCast(rgb[0]), .y = @floatCast(rgb[1]), .z = @floatCast(rgb[2]) },
                 .metallic = @floatCast(metallic),
                 .roughness = @floatCast(roughness),
                 .ao = @floatCast(ao),
+                .emissive = RGB{ .x = @floatCast(emissive_rgb[0]), .y = @floatCast(emissive_rgb[1]), .z = @floatCast(emissive_rgb[2]) },
             },
             .pbr_texture = null,
             .name = name,

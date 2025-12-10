@@ -146,10 +146,10 @@ export fn frame() void {
     sg.applyBindings(state.bind);
     sg.draw(0, 4, 1);
 
-    // sg.applyPipeline(state.dbg_pip);
-    // sg.applyViewport(0 * 150, 0, 150, 150, false);
-    // sg.applyBindings(state.dbg_bind);
-    // sg.draw(0, 4, 1);
+    sg.applyPipeline(state.dbg_pip);
+    sg.applyViewport(0 * 150, 0, 150, 150, false);
+    sg.applyBindings(state.dbg_bind);
+    sg.draw(0, 4, 1);
 
     sg.endPass();
     sg.commit();

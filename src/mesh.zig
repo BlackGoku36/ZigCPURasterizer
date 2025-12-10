@@ -20,7 +20,7 @@ pub const Mesh = struct {
     indices_16: ?[]u16,
     indices_32: ?[]u32,
     transform: Matrix4,
-    material: usize,
+    material: ?usize,
 };
 
 pub const LightType = enum {
@@ -94,14 +94,6 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
             indices_32 = try gltf.getDataFromBufferView(u32, allocator, indices_accessor, binary);
         }
 
-        var pbr_material_idx: usize = undefined;
-
-        if (p.material) |material_idx| {
-            pbr_material_idx = material_idx;
-        } else {
-            std.debug.print("No Material found for: {s}\n", .{m.name.?});
-        }
-
         var tex_coord_count: u8 = 0;
         for (p.attributes) |a| {
             switch (a) {
@@ -133,6 +125,7 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
         } else if (indices_32) |indice_32| {
             indices_len = indice_32.len;
         }
+
         var i: usize = 0;
         while (i < indices_len) : (i += 3) {
             var idx1: usize = 0;
@@ -170,18 +163,6 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
             new_normals[idx3 * 3 + 2] += cross.z;
         }
 
-        // var j: usize = 0;
-        // while (j < new_normals.len) : (j += 3) {
-        //     var n = Vec3{
-        //         .x = new_normals[j * 3 + 0],
-        //         .y = new_normals[j * 3 + 1],
-        //         .z = new_normals[j * 3 + 2],
-        //     };
-        //     n = n.normalize();
-        //     new_normals[j * 3 + 0] = n.x;
-        //     new_normals[j * 3 + 1] = n.y;
-        //     new_normals[j * 3 + 2] = n.z;
-        // }
         try meshes.append(allocator, Mesh{
             .vertices = vertices,
             .uvs = uvs,
@@ -190,7 +171,7 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
             .indices_32 = indices_32,
             .name = name,
             .transform = transform,
-            .material = pbr_material_idx,
+            .material = p.material,
         });
     }
 }
@@ -223,6 +204,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         color_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, color_texture_uri });
         color_texture_path = std.Uri.percentDecodeInPlace(color_texture_path.?);
     }
+
     if (material.metallic_roughness.metallic_roughness_texture) |metallic_rougness_texture| {
         const texture_idx = metallic_rougness_texture.index;
         const metallic_rougness_texture_source_idx = gltf.data.textures[texture_idx].source.?;
@@ -240,6 +222,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         normal_texture_path = std.Uri.percentDecodeInPlace(normal_texture_path.?);
         normal_strength = normal_texture.scale;
     }
+
     if (material.occlusion_texture) |occlusion_texture| {
         const texture_idx = occlusion_texture.index;
         const occlusion_texture_source_idx = gltf.data.textures[texture_idx].source.?;
@@ -247,6 +230,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         occlusion_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, occlusion_texture_uri });
         occlusion_texture_path = std.Uri.percentDecodeInPlace(occlusion_texture_path.?);
     }
+
     if (material.emissive_texture) |emissive_texture| {
         const texture_idx = emissive_texture.index;
         const emissive_texture_source_idx = gltf.data.textures[texture_idx].source.?;
@@ -259,10 +243,6 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     std.debug.print("Has Normal Texture: {}\n", .{normal_texture_path != null});
     std.debug.print("Has Occlusion Texture: {}\n", .{occlusion_texture_path != null});
     std.debug.print("Has Emissive Texture: {}\n", .{emissive_texture_path != null});
-
-    // if (material.normal_texture) |tex| {
-    // normal_strength = tex.scale;
-    // }
 
     var pbr_material = PBRMaterial.fromGltfTextureFiles(
         color_texture_path,
@@ -326,12 +306,18 @@ pub const Meshes = struct {
                 rgb[0] = material.metallic_roughness.base_color_factor[0];
                 rgb[1] = material.metallic_roughness.base_color_factor[1];
                 rgb[2] = material.metallic_roughness.base_color_factor[2];
+
+                var emissive_rgb: [3]f32 = [_]f32{ 0.0, 0.0, 0.0 };
+                emissive_rgb[0] = material.emissive_factor[0] * material.emissive_strength;
+                emissive_rgb[1] = material.emissive_factor[1] * material.emissive_strength;
+                emissive_rgb[2] = material.emissive_factor[2] * material.emissive_strength;
                 pbr_material = PBRMaterial.fromGltfConstants(
                     material.name orelse "name_less material",
                     rgb,
                     material.metallic_roughness.metallic_factor,
                     material.metallic_roughness.roughness_factor,
                     0.1,
+                    emissive_rgb,
                 );
             }
 

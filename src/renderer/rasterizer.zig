@@ -16,6 +16,8 @@ const Color = rendertarget.Color;
 const TextureR = @import("../utils/texture.zig").TextureR;
 const TextureRGB = @import("../utils/texture.zig").TextureRGB;
 const TexturePBR = @import("../utils/texture.zig").TexturePBR;
+const PBRSolid = @import("../utils/texture.zig").PBRSolid;
+const RGB = @import("../utils/texture.zig").RGB;
 const PBRTextureDescriptor = @import("../utils/texture.zig").PBRTextureDescriptor;
 
 const material_import = @import("../material.zig");
@@ -337,38 +339,10 @@ const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromIn
 
 const winding_order = WindingOrder.CCW;
 
-// Lion
-// const light_pos = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
-// Sphere
-// const light_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
-// Camera
-// const light_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
-// Cannon
-// const light_pos = Vec3{ .x = 0.0, .y = 1.0, .z = 0.5 };
-// Chess Set
-// const light_pos = Vec3{ .x = 0.0, .y = 0.5, .z = 0.0 };
-// const light_pos = Vec3{ .x = -3.0, .y = 2.0, .z = 0.0 };
-// const light_to = Vec3{ .x = 2.0, .y = 2.0, .z = 0.0 };
-
-// Lion
-// const camera_pos = Vec3{ .x = -0.6, .y = 0.2, .z = 0.0 };
-// Sphere
-// const camera_pos = Vec3{.x = -2.6, .y = 0.5, .z = 0.0 };
-// Camera
-// const camera_pos = Vec3{ .x = -0.3, .y = 0.1, .z = 0.0 };
-// Cannon
-// const camera_pos = Vec3{ .x = 1.5, .y = 1.5, .z = 1.5 };
-//Chess Set
-// const camera_pos = Vec3{ .x = 0.2, .y = 0.2, .z = 0.2 };
 var camera_pos = Vec3{ .x = -3.0, .y = 1.0, .z = 0.0 };
-// const to = Vec3{ .x = -4.0, .y = 1.0, .z = 0.0 };
-// const to = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-// Lion
-// const to = Vec3{ .x = 0.0, .y = 0.2, .z = 0.0 };
-// const up = Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 };
 
-var projection_mat: Matrix4 = undefined; //Matrix4.perspectiveProjection(45.0, aspect_ratio, 0.1, 100.0);
-var view_mat: Matrix4 = undefined; //Matrix4.lookAt(camera_pos, to, up);
+var projection_mat: Matrix4 = undefined;
+var view_mat: Matrix4 = undefined;
 
 pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("cannon_01_2k/cannon_01_2k.gltf", allocator);
@@ -413,10 +387,28 @@ pub fn render(_: f32, camera: usize) !void {
             indices_len = indice_32.len;
         }
 
+        // std.debug.print("Mesh name: {s}\n", .{mesh.name});
+        var active_material: Material = undefined;
+        if (mesh.material) |material_idx| {
+            active_material = meshes.materials.items[material_idx];
+        } else {
+            active_material = Material{
+                .pbr_solid = PBRSolid{
+                    .albedo = RGB{ .x = 1.0, .y = 0.0, .z = 0.0 },
+                    .metallic = 0.5,
+                    .roughness = 0.5,
+                    .ao = 0.1,
+                    .emissive = RGB{ .x = 1.0, .y = 1.0, .z = 1.0 },
+                },
+                .pbr_texture = null,
+                .name = "Material Less",
+                .tex_coord = 0,
+                .type = .Solid,
+            };
+        }
+
         var i: u32 = 0;
         while (i < indices_len) : (i += 3) {
-            const active_material: Material = meshes.materials.items[mesh.material];
-
             var idx1: usize = 0;
             var idx2: usize = 0;
             var idx3: usize = 0;
@@ -442,22 +434,19 @@ pub fn render(_: f32, camera: usize) !void {
             // const norm2 = Vec3.normalize(Vec3.cross(Vec3.sub(vert2, vert3), Vec3.sub(vert2, vert1)));
             // const norm3 = Vec3.normalize(Vec3.cross(Vec3.sub(vert3, vert1), Vec3.sub(vert3, vert2)));
 
-            const mesh_uv = mesh.uvs[active_material.tex_coord];
-            // std.debug.print("Active tex coord: {d}\n", .{active_material.tex_coord});
-            // std.debug.print("Index: {d} {d}\n", .{ idx1 * 2, mesh_uv.len });
-
             //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
             var uv1: Vec2 = undefined;
             var uv2: Vec2 = undefined;
             var uv3: Vec2 = undefined;
-            if (mesh_uv.len == 0) {
-                uv1 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv2 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv3 = Vec2{ .x = 0.5, .y = 0.5 };
-            } else {
+            if (active_material.type == .Textured) {
+                const mesh_uv = mesh.uvs[active_material.tex_coord];
                 uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
                 uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
                 uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
+            } else {
+                uv1 = Vec2{ .x = 0.5, .y = 0.5 };
+                uv2 = Vec2{ .x = 0.5, .y = 0.5 };
+                uv3 = Vec2{ .x = 0.5, .y = 0.5 };
             }
 
             const tan1 = calculateTangent(vert1, vert2, vert3, uv1, uv2, uv3);
@@ -555,11 +544,11 @@ pub fn render(_: f32, camera: usize) !void {
                                     const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
                                     const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
 
-                                    var albedo: Vec3 = undefined;
-                                    var normal: Vec3 = undefined;
-                                    var metallic: f32 = undefined;
-                                    var roughness: f32 = undefined;
-                                    var ao: f32 = undefined;
+                                    var albedo: Vec3 = Vec3.init(0.0);
+                                    var normal: Vec3 = Vec3.init(0.0);
+                                    var metallic: f32 = 0.0;
+                                    var roughness: f32 = 0.0;
+                                    var ao: f32 = 0.0;
 
                                     var emissive: Vec3 = Vec3.init(0.0);
 
@@ -606,6 +595,8 @@ pub fn render(_: f32, camera: usize) !void {
                                         metallic = @floatCast(pbr_solid.metallic);
                                         roughness = @floatCast(pbr_solid.roughness);
                                         ao = @floatCast(pbr_solid.ao);
+
+                                        emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
                                     }
 
                                     const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
@@ -661,6 +652,10 @@ pub fn render(_: f32, camera: usize) !void {
                                     color = color.add(emissive);
                                     color = color.divv(color.add(Vec3.init(1.0)));
                                     color = color.pow(Vec3.init(1.0 / 2.2));
+
+                                    // color.x = Lo.x;
+                                    // color.y = Lo.y;
+                                    // color.z = Lo.z;
 
                                     frame_buffer.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) });
                                 }
