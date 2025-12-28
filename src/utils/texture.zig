@@ -26,6 +26,7 @@ pub const PBR = struct {
 
     pub fn mix(start: PBR, end: PBR, t: f16) PBR {
         return PBR{
+            // TODO: This way of mixing color good enough?
             .albedo = RGB.mix(start.albedo, end.albedo, t),
             .normal = RGB.mix(start.normal, end.normal, t),
             .emissive = RGB.mix(start.emissive, end.emissive, t),
@@ -34,14 +35,6 @@ pub const PBR = struct {
             .ao = start.ao * (1 - t) + end.ao * t,
         };
     }
-    // pub fn mix(start: Vec4, end: Vec4, t: f32) Vec4 {
-    //     return Vec4{
-    //         .x = start.x * (1 - t) + end.x * t,
-    //         .y = start.y * (1 - t) + end.y * t,
-    //         .z = start.z * (1 - t) + end.z * t,
-    //         .w = start.w * (1 - t) + end.w * t,
-    //     };
-    // }
 };
 
 pub const PBRSolid = struct {

@@ -466,6 +466,7 @@ fn bilinearClampSample(tex: [64 * 64]Vec4, uv_: Vec2) Vec4 {
     return Vec4.mix(c0, c1, frac.y);
 }
 
+// TODO: look into texture sampling
 fn pbrBilinearSample(texture: TexturePBR, uv_: Vec2) PBR {
     const uv = uv_.clamp(Vec2.init(0.0), Vec2.init(1.0));
 
@@ -920,7 +921,8 @@ pub fn render(theta: f32, camera: usize) !void {
                                                 Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
                                             }
                                         }
-
+                                        // const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
+                                        // var color = Vec3.add(ambient, Lo);
                                         var color = Lo;
                                         color = color.add(emissive);
                                         color = color.divv(color.add(Vec3.init(1.0)));
