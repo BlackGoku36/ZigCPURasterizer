@@ -577,8 +577,8 @@ pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
-    meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
-    // meshes = try Meshes.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
+    meshes = try Meshes.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
@@ -950,6 +950,7 @@ pub fn deinit() void {
     // mesh.deinit(allocator);
     // TODO: Deallocate name strings and textures/materials in mesh.zig and material.zig
     // texture_pbr.deinit(allocator);
+    meshes.deinit(allocator);
     frame_buffer.deinit();
     depth_buffer.deinit();
     arena.deinit();

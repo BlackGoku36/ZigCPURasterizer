@@ -15,6 +15,7 @@ pub const MaterialInfo = struct {
 pub const Mesh = struct {
     vertices: []f32,
     uvs: [3][]f32,
+    uvs_count: u8,
     normals: []f32,
     name: []u8,
     indices_16: ?[]u16,
@@ -169,6 +170,7 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
         try meshes.append(allocator, Mesh{
             .vertices = vertices,
             .uvs = uvs,
+            .uvs_count = tex_coord_count,
             .normals = new_normals,
             .indices_16 = indices_16,
             .indices_32 = indices_32,
@@ -241,6 +243,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         emissive_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, emissive_texture_uri });
         emissive_texture_path = std.Uri.percentDecodeInPlace(emissive_texture_path.?);
     }
+
     std.debug.print("Has Color Texture: {}\n", .{color_texture_path != null});
     std.debug.print("Has Metallic-Roughness Texture: {}\n", .{metallic_rougness_texture_path != null});
     std.debug.print("Has Normal Texture: {}\n", .{normal_texture_path != null});
@@ -259,6 +262,12 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
 
     pbr_material.tex_coord = @intCast(material.metallic_roughness.base_color_texture.?.texcoord);
     std.debug.print("TEXCOORD: {d}\n", .{pbr_material.tex_coord});
+
+    if (color_texture_path) |texture_path| allocator.free(texture_path);
+    if (metallic_rougness_texture_path) |texture_path| allocator.free(texture_path);
+    if (normal_texture_path) |texture_path| allocator.free(texture_path);
+    if (occlusion_texture_path) |texture_path| allocator.free(texture_path);
+    if (emissive_texture_path) |texture_path| allocator.free(texture_path);
 
     return pbr_material;
 }
@@ -504,5 +513,28 @@ pub const Meshes = struct {
             .lights = lights,
             .cameras = cameras,
         };
+    }
+
+    pub fn deinit(meshes: *Meshes, allocator: std.mem.Allocator) void {
+        for (meshes.materials.items) |material| {
+            material.deinit(allocator);
+        }
+        meshes.materials.deinit(allocator);
+
+        for (meshes.meshes.items) |mesh| {
+            allocator.free(mesh.vertices);
+            allocator.free(mesh.normals);
+            for (0..mesh.uvs_count) |i| {
+                allocator.free(mesh.uvs[i]);
+            }
+            if (mesh.indices_16) |indices| {
+                allocator.free(indices);
+            } else {
+                allocator.free(mesh.indices_32.?);
+            }
+        }
+        meshes.meshes.deinit(allocator);
+        meshes.lights.deinit(allocator);
+        meshes.cameras.deinit(allocator);
     }
 };

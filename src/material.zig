@@ -67,4 +67,11 @@ pub const Material = struct {
             .tex_coord = 0,
         };
     }
+
+    pub fn deinit(material: Material, allocator: std.mem.Allocator) void {
+        switch (material.type) {
+            .Textured => material.pbr_texture.?.deinit(allocator),
+            .Solid => {},
+        }
+    }
 };
