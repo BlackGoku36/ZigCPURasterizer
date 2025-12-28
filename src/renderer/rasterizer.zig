@@ -26,7 +26,7 @@ const Materials = material_import.Materials;
 const Material = material_import.Material;
 
 const Mesh = @import("../mesh.zig").Mesh;
-const Meshes = @import("../mesh.zig").Meshes;
+const Scene = @import("../mesh.zig").Scene;
 
 const ltc = @import("ltc_lut.zig");
 const LTC1 = ltc.LTC1Vec;
@@ -559,7 +559,7 @@ const allocator = arena.allocator();
 pub var frame_buffer: RenderTargetRGBA16 = undefined;
 pub var depth_buffer: RenderTargetR16 = undefined;
 
-var meshes: Meshes = undefined;
+var scene: Scene = undefined;
 
 var tex_width_f32: f32 = 0.0;
 var tex_height_f32: f32 = 0.0;
@@ -578,12 +578,12 @@ pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
-    meshes = try Meshes.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
+    scene = try Scene.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
-    const c = meshes.cameras.items[0];
+    const c = scene.cameras.items[0];
     camera_pos = c.pos;
     view_mat = c.view_matrix;
     if (c.type == .Perspective) {
@@ -598,12 +598,12 @@ pub fn render(theta: f32, camera: usize) !void {
     frame_buffer.clearColor(0.2);
     depth_buffer.clearColor(1.0);
 
-    const cam = meshes.cameras.items[camera % meshes.cameras.items.len];
+    const cam = scene.cameras.items[camera % scene.cameras.items.len];
     camera_pos = cam.pos;
     view_mat = cam.view_matrix;
 
     // const rot_mat = Matrix4.rotateY(theta);
-    for (meshes.meshes.items) |mesh| {
+    for (scene.meshes.items) |mesh| {
         if (!mesh.should_render) continue;
         // if (std.mem.eql(u8, mesh.name, "Cube")) continue;
         // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
@@ -623,7 +623,7 @@ pub fn render(theta: f32, camera: usize) !void {
         // std.debug.print("Mesh name: {s}\n", .{mesh.name});
         var active_material: Material = undefined;
         if (mesh.material) |material_idx| {
-            active_material = meshes.materials.items[material_idx];
+            active_material = scene.materials.items[material_idx];
         } else {
             active_material = Material{
                 .pbr_solid = PBRSolid{
@@ -842,7 +842,7 @@ pub fn render(theta: f32, camera: usize) !void {
                                         var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
                                         f0 = Vec3.mix(f0, albedo, metallic);
 
-                                        for (meshes.lights.items) |light| {
+                                        for (scene.lights.items) |light| {
                                             if (light.type == .Area) {
                                                 const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
 
@@ -950,7 +950,7 @@ pub fn deinit() void {
     // mesh.deinit(allocator);
     // TODO: Deallocate name strings and textures/materials in mesh.zig and material.zig
     // texture_pbr.deinit(allocator);
-    meshes.deinit(allocator);
+    scene.deinit(allocator);
     frame_buffer.deinit();
     depth_buffer.deinit();
     arena.deinit();

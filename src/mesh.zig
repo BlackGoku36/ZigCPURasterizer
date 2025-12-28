@@ -272,14 +272,14 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     return pbr_material;
 }
 
-pub const Meshes = struct {
+pub const Scene = struct {
     meshes: std.ArrayList(Mesh),
     // TODO: Move this out of here
     materials: std.ArrayList(PBRMaterial),
     lights: std.ArrayList(Light),
     cameras: std.ArrayList(Camera),
 
-    pub fn fromGLTFFile(fileName: []const u8, allocator: std.mem.Allocator) !Meshes {
+    pub fn fromGLTFFile(fileName: []const u8, allocator: std.mem.Allocator) !Scene {
         const parent_path = std.fs.path.dirname(fileName).?;
 
         var meshes: std.ArrayList(Mesh) = .{};
@@ -507,7 +507,7 @@ pub const Meshes = struct {
                 .type = .Point,
             });
         }
-        return Meshes{
+        return Scene{
             .meshes = meshes,
             .materials = materials,
             .lights = lights,
@@ -515,7 +515,7 @@ pub const Meshes = struct {
         };
     }
 
-    pub fn deinit(meshes: *Meshes, allocator: std.mem.Allocator) void {
+    pub fn deinit(meshes: *Scene, allocator: std.mem.Allocator) void {
         for (meshes.materials.items) |material| {
             material.deinit(allocator);
         }
