@@ -1,5 +1,10 @@
 A CPU Rasterizer written in Zig during my free time for fun and to learn.
 
+- PBR Shading
+- Lights: Area, Point, Directional
+- Texture (Bilinear sampling)
+- glTF format (W.I.P, doesn't support .glb file, PBR Textures of different sizes, spotlight, among some other things)
+
 Zig version: 0.15.1
 
 ## Build Instructions
@@ -8,13 +13,27 @@ Zig version: 0.15.1
 <!--- The submodules-->
 <!--- Sokol-shdc bin from [here](https://github.com/floooh/sokol-tools-bin), and set ENV var to it. (to compile sokol side shader, in case you just want to run, you can comment out `line 15` from `build.zig` as the shader is already compiled).-->
 
-Just do:
+Put glTF (.gltf) in project_root/assets/ with below structure:
+
+```
+project_root/
+		assets/
+				some_demo/
+						demo.gltf
+						demo.bin
+								textures/
+										...
+```
+
+Run (in project_root):
 
 ```
 zig build run -Doptimize=ReleaseFast
 ```
+---
 
-You should get:
+Screenshot:
+
 ![screenshot](screenshot.png)
 
 ---
