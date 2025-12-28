@@ -72,9 +72,17 @@ pub const Vec3 = struct {
 
     pub fn max(a: Vec3, b: Vec3) Vec3 {
         return Vec3{
-            .x = @max(f32, a.x, b.x),
-            .y = @max(f32, a.y, b.y),
-            .z = @max(f32, a.z, b.z),
+            .x = @max(a.x, b.x),
+            .y = @max(a.y, b.y),
+            .z = @max(a.z, b.z),
+        };
+    }
+
+    pub fn min(a: Vec3, b: Vec3) Vec3 {
+        return Vec3{
+            .x = @min(a.x, b.x),
+            .y = @min(a.y, b.y),
+            .z = @min(a.z, b.z),
         };
     }
 

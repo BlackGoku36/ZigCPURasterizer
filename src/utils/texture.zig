@@ -2,7 +2,19 @@ const std = @import("std");
 const Vec3 = @import("../math/vec3.zig").Vec3;
 const zigimg = @import("zigimg");
 
-pub const RGB = struct { x: f16, y: f16, z: f16 };
+pub const RGB = struct {
+    x: f16,
+    y: f16,
+    z: f16,
+
+    pub fn mix(start: RGB, end: RGB, t: f16) RGB {
+        return RGB{
+            .x = start.x * (1 - t) + end.x * t,
+            .y = start.y * (1 - t) + end.y * t,
+            .z = start.z * (1 - t) + end.z * t,
+        };
+    }
+};
 
 pub const PBR = struct {
     albedo: RGB,
@@ -11,6 +23,25 @@ pub const PBR = struct {
     roughness: f16,
     ao: f16,
     emissive: RGB,
+
+    pub fn mix(start: PBR, end: PBR, t: f16) PBR {
+        return PBR{
+            .albedo = RGB.mix(start.albedo, end.albedo, t),
+            .normal = RGB.mix(start.normal, end.normal, t),
+            .emissive = RGB.mix(start.emissive, end.emissive, t),
+            .metallic = start.metallic * (1 - t) + end.metallic * t,
+            .roughness = start.roughness * (1 - t) + end.roughness * t,
+            .ao = start.ao * (1 - t) + end.ao * t,
+        };
+    }
+    // pub fn mix(start: Vec4, end: Vec4, t: f32) Vec4 {
+    //     return Vec4{
+    //         .x = start.x * (1 - t) + end.x * t,
+    //         .y = start.y * (1 - t) + end.y * t,
+    //         .z = start.z * (1 - t) + end.z * t,
+    //         .w = start.w * (1 - t) + end.w * t,
+    //     };
+    // }
 };
 
 pub const PBRSolid = struct {
@@ -195,9 +226,9 @@ pub const TexturePBR = struct {
             for (emissive_tex.pixels.rgb24) |e| {
                 const color = e.to.float4();
                 // Do we gamme correct?
-                _buffer[index].emissive.x = @floatCast(color[0] * tex_desc.emissive_strength);
-                _buffer[index].emissive.y = @floatCast(color[1] * tex_desc.emissive_strength);
-                _buffer[index].emissive.z = @floatCast(color[2] * tex_desc.emissive_strength);
+                _buffer[index].emissive.x = @floatCast(std.math.pow(f32, color[0], 2.22) * tex_desc.emissive_strength);
+                _buffer[index].emissive.y = @floatCast(std.math.pow(f32, color[1], 2.22) * tex_desc.emissive_strength);
+                _buffer[index].emissive.z = @floatCast(std.math.pow(f32, color[2], 2.22) * tex_desc.emissive_strength);
                 index += 1;
             }
         }

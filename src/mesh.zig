@@ -21,11 +21,13 @@ pub const Mesh = struct {
     indices_32: ?[]u32,
     transform: Matrix4,
     material: ?usize,
+    should_render: bool = true,
 };
 
 pub const LightType = enum {
     Point,
     Directional,
+    Area,
 };
 
 pub const Light = struct {
@@ -34,6 +36,7 @@ pub const Light = struct {
     intensity: f32,
     color: Vec3,
     type: LightType,
+    verts: ?[4]Vec3 = null,
 };
 
 pub const CameraType = enum { Perspective, Orthogonal };
@@ -308,9 +311,12 @@ pub const Meshes = struct {
                 rgb[2] = material.metallic_roughness.base_color_factor[2];
 
                 var emissive_rgb: [3]f32 = [_]f32{ 0.0, 0.0, 0.0 };
-                emissive_rgb[0] = material.emissive_factor[0] * material.emissive_strength;
-                emissive_rgb[1] = material.emissive_factor[1] * material.emissive_strength;
-                emissive_rgb[2] = material.emissive_factor[2] * material.emissive_strength;
+                emissive_rgb[0] = std.math.pow(f32, material.emissive_factor[0], 2.22) * (material.emissive_strength / std.math.pi);
+                emissive_rgb[1] = std.math.pow(f32, material.emissive_factor[1], 2.22) * (material.emissive_strength / std.math.pi);
+                emissive_rgb[2] = std.math.pow(f32, material.emissive_factor[2], 2.22) * (material.emissive_strength / std.math.pi);
+                // emissive_rgb[0] = material.emissive_factor[0] * material.emissive_strength;
+                // emissive_rgb[1] = material.emissive_factor[1] * material.emissive_strength;
+                // emissive_rgb[2] = material.emissive_factor[2] * material.emissive_strength;
                 pbr_material = PBRMaterial.fromGltfConstants(
                     material.name orelse "name_less material",
                     rgb,
@@ -333,6 +339,54 @@ pub const Meshes = struct {
 
                     if (node.mesh) |_| {
                         try getMeshFromNode(gltf, binary, node, matrix, &meshes, allocator);
+                        if (node.name) |node_name| {
+                            if (std.mem.startsWith(u8, node_name, "arealight_")) {
+                                const m = meshes.items[@as(u32, @intCast(meshes.items.len)) - 1];
+                                meshes.items[@as(u32, @intCast(meshes.items.len)) - 1].should_render = false;
+
+                                var area_idx1: usize = 0;
+                                var area_idx2: usize = 0;
+                                var area_idx5: usize = 0;
+                                var area_idx6: usize = 0;
+
+                                if (m.indices_16) |indice_16| {
+                                    area_idx1 = @intCast(indice_16[0]);
+                                    area_idx2 = @intCast(indice_16[1]);
+                                    area_idx5 = @intCast(indice_16[4]);
+                                    area_idx6 = @intCast(indice_16[5]);
+                                } else if (m.indices_32) |indice_32| {
+                                    area_idx1 = @intCast(indice_32[0]);
+                                    area_idx2 = @intCast(indice_32[1]);
+                                    area_idx5 = @intCast(indice_32[4]);
+                                    area_idx6 = @intCast(indice_32[5]);
+                                }
+
+                                var area_vert1 = Vec3{ .x = m.vertices[area_idx1 * 3 + 0], .y = m.vertices[area_idx1 * 3 + 1], .z = m.vertices[area_idx1 * 3 + 2] };
+                                var area_vert2 = Vec3{ .x = m.vertices[area_idx2 * 3 + 0], .y = m.vertices[area_idx2 * 3 + 1], .z = m.vertices[area_idx2 * 3 + 2] };
+                                var area_vert3 = Vec3{ .x = m.vertices[area_idx5 * 3 + 0], .y = m.vertices[area_idx5 * 3 + 1], .z = m.vertices[area_idx5 * 3 + 2] };
+                                var area_vert4 = Vec3{ .x = m.vertices[area_idx6 * 3 + 0], .y = m.vertices[area_idx6 * 3 + 1], .z = m.vertices[area_idx6 * 3 + 2] };
+
+                                const transform = getMatrixFromNode(node, matrix);
+                                area_vert1 = Matrix4.multVec3(transform, area_vert1);
+                                area_vert2 = Matrix4.multVec3(transform, area_vert2);
+                                area_vert3 = Matrix4.multVec3(transform, area_vert3);
+                                area_vert4 = Matrix4.multVec3(transform, area_vert4);
+
+                                const material_idx = m.material.?;
+                                const mesh_material = materials.items[material_idx];
+                                const emission = mesh_material.pbr_solid.?.emissive;
+
+                                // const mesh_idx = node.mesh.?;
+                                try lights.append(allocator, Light{
+                                    .pos = Vec3.init(0.0),
+                                    .range = 0.0,
+                                    .intensity = 5.0,
+                                    .color = Vec3{ .x = emission.x, .y = emission.y, .z = emission.z },
+                                    .type = .Area,
+                                    .verts = [4]Vec3{ area_vert1, area_vert2, area_vert3, area_vert4 },
+                                });
+                            }
+                        }
                     } else if (node.light) |light_idx| {
                         // const light_pos = node.translation;
                         const light = gltf.data.lights[light_idx];
@@ -340,6 +394,7 @@ pub const Meshes = struct {
                             // const q = Quat{ .c = Vec3{ .x = node.rotation[0], .y = node.rotation[1], .z = node.rotation[2] }, .r = node.rotation[3] };
                             // const v = Vec3{ .x = 0.0, .y = 0.0, .z = -1.0 };
                             // const direction = Matrix4.multVec3(Quat.mat4FromQuat(q), v);
+                            // TODO: Try convert the color to linear space by color^2.22
                             // try lights.append(allocator, Light{
                             //     .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
                             //     .pos = direction,
@@ -351,9 +406,13 @@ pub const Meshes = struct {
                             std.debug.print("light color: {} {} {}\n", .{ light.color[0], light.color[1], light.color[2] });
                             std.debug.print("light intensity: {}\n", .{light.intensity});
                             try lights.append(allocator, Light{
-                                .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
+                                .color = Vec3{
+                                    .x = std.math.pow(f32, light.color[0], 2.22),
+                                    .y = std.math.pow(f32, light.color[1], 2.22),
+                                    .z = std.math.pow(f32, light.color[2], 2.22),
+                                },
                                 .pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] },
-                                .intensity = light.intensity * 0.0001,
+                                .intensity = light.intensity * 0.0005,
                                 .range = light.range,
                                 .type = .Point,
                             });

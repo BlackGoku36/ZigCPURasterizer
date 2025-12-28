@@ -6,6 +6,15 @@ pub const Vec4 = struct {
     z: f32 = 0.0,
     w: f32 = 1.0,
 
+    pub fn init(a: f32) Vec4 {
+        return Vec4{
+            .x = a,
+            .y = a,
+            .z = a,
+            .w = a,
+        };
+    }
+
     pub fn add(a: Vec4, b: Vec4) Vec4 {
         return Vec4{
             .x = a.x + b.x,
@@ -24,8 +33,35 @@ pub const Vec4 = struct {
         };
     }
 
+    pub fn multf(a: Vec4, s: f32) Vec4 {
+        return Vec4{
+            .x = a.x * s,
+            .y = a.y * s,
+            .z = a.z * s,
+            .w = a.w * s,
+        };
+    }
+
+    pub fn divv(a: Vec4, b: Vec4) Vec4 {
+        return Vec4{
+            .x = a.x / b.x,
+            .y = a.y / b.y,
+            .z = a.z / b.z,
+            .w = a.w / b.w,
+        };
+    }
+
     pub fn dot(a: Vec4, b: Vec4) f32 {
         return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+
+    pub fn mix(start: Vec4, end: Vec4, t: f32) Vec4 {
+        return Vec4{
+            .x = start.x * (1 - t) + end.x * t,
+            .y = start.y * (1 - t) + end.y * t,
+            .z = start.z * (1 - t) + end.z * t,
+            .w = start.w * (1 - t) + end.w * t,
+        };
     }
 
     pub fn toVec3(self: Vec4) Vec3 {

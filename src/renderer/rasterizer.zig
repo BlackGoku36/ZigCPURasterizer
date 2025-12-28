@@ -18,6 +18,7 @@ const TextureRGB = @import("../utils/texture.zig").TextureRGB;
 const TexturePBR = @import("../utils/texture.zig").TexturePBR;
 const PBRSolid = @import("../utils/texture.zig").PBRSolid;
 const RGB = @import("../utils/texture.zig").RGB;
+const PBR = @import("../utils/texture.zig").PBR;
 const PBRTextureDescriptor = @import("../utils/texture.zig").PBRTextureDescriptor;
 
 const material_import = @import("../material.zig");
@@ -27,8 +28,14 @@ const Material = material_import.Material;
 const Mesh = @import("../mesh.zig").Mesh;
 const Meshes = @import("../mesh.zig").Meshes;
 
-pub const width = 1280;
-pub const height = 720;
+const ltc = @import("ltc_lut.zig");
+const LTC1 = ltc.LTC1Vec;
+const LTC2 = ltc.LTC2Vec;
+
+// pub const width = 1280;
+// pub const height = 720;
+pub const width = 1500;
+pub const height = 750;
 
 const WindingOrder = enum { CW, CCW };
 const ClippingPlane = enum(u8) { NEAR, FAR, LEFT, RIGHT, TOP, BOTTOM };
@@ -326,6 +333,226 @@ fn calculateTangent(pos1: Vec3, pos2: Vec3, pos3: Vec3, uv1: Vec2, uv2: Vec2, uv
     return tangent;
 }
 
+fn clipOp(a: Vec3, b: Vec3) Vec3 {
+    const term1 = Vec3.multf(b, -a.z);
+    const term2 = Vec3.multf(a, b.z);
+    return Vec3.add(term1, term2);
+}
+
+// Source: https://blog.selfshadow.com/sandbox/ltc.html
+pub fn clipQuadToHorizon(L: *[5]Vec3, n: *usize) void {
+    // Detect clipping config
+    var config: u32 = 0;
+    if (L[0].z > 0.0) config += 1;
+    if (L[1].z > 0.0) config += 2;
+    if (L[2].z > 0.0) config += 4;
+    if (L[3].z > 0.0) config += 8;
+
+    // Clip
+    n.* = 0;
+
+    if (config == 0) {
+        // clip all
+    } else if (config == 1) { // V1 clip V2 V3 V4
+        n.* = 3;
+        L[1] = clipOp(L[1], L[0]);
+        L[2] = clipOp(L[3], L[0]);
+    } else if (config == 2) { // V2 clip V1 V3 V4
+        n.* = 3;
+        L[0] = clipOp(L[0], L[1]);
+        L[2] = clipOp(L[2], L[1]);
+    } else if (config == 3) { // V1 V2 clip V3 V4
+        n.* = 4;
+        L[2] = clipOp(L[2], L[1]);
+        L[3] = clipOp(L[3], L[0]);
+    } else if (config == 4) { // V3 clip V1 V2 V4
+        n.* = 3;
+        L[0] = clipOp(L[3], L[2]);
+        L[1] = clipOp(L[1], L[2]);
+    } else if (config == 5) { // V1 V3 clip V2 V4 (impossible)
+        n.* = 0;
+    } else if (config == 6) { // V2 V3 clip V1 V4
+        n.* = 4;
+        L[0] = clipOp(L[0], L[1]);
+        L[3] = clipOp(L[3], L[2]);
+    } else if (config == 7) { // V1 V2 V3 clip V4
+        n.* = 5;
+        L[4] = clipOp(L[3], L[0]);
+        L[3] = clipOp(L[3], L[2]);
+    } else if (config == 8) { // V4 clip V1 V2 V3
+        n.* = 3;
+        L[0] = clipOp(L[0], L[3]);
+        L[1] = clipOp(L[2], L[3]);
+        L[2] = L[3]; // Direct assignment
+    } else if (config == 9) { // V1 V4 clip V2 V3
+        n.* = 4;
+        L[1] = clipOp(L[1], L[0]);
+        L[2] = clipOp(L[2], L[3]);
+    } else if (config == 10) { // V2 V4 clip V1 V3 (impossible)
+        n.* = 0;
+    } else if (config == 11) { // V1 V2 V4 clip V3
+        n.* = 5;
+        L[4] = L[3]; // Direct assignment
+        L[3] = clipOp(L[2], L[3]);
+        L[2] = clipOp(L[2], L[1]);
+    } else if (config == 12) { // V3 V4 clip V1 V2
+        n.* = 4;
+        L[1] = clipOp(L[1], L[2]);
+        L[0] = clipOp(L[0], L[3]);
+    } else if (config == 13) { // V1 V3 V4 clip V2
+        n.* = 5;
+        L[4] = L[3]; // Direct assignment
+        L[3] = L[2]; // Direct assignment
+        L[2] = clipOp(L[1], L[2]);
+        L[1] = clipOp(L[1], L[0]);
+    } else if (config == 14) { // V2 V3 V4 clip V1
+        n.* = 5;
+        L[4] = clipOp(L[0], L[3]);
+        L[0] = clipOp(L[0], L[1]);
+    } else if (config == 15) { // V1 V2 V3 V4
+        n.* = 4;
+    }
+
+    if (n.* == 3) {
+        L[3] = L[0];
+    }
+    if (n.* == 4) {
+        L[4] = L[0];
+    }
+}
+
+fn integrateEdge(v1: Vec3, v2: Vec3) Vec3 {
+    const x = Vec3.dot(v1, v2);
+    const y = @abs(x);
+    const a = 0.8543985 + (0.4965155 + 0.0145206 * y) * y;
+    const b = 3.4175940 + (4.1616724 + y) * y;
+    const v = a / b;
+    const v1CrossV2 = Vec3.cross(v1, v2);
+    if (x > 0.0) {
+        return Vec3.multf(v1CrossV2, v);
+    } else {
+        const invsqrt = 1.0 / @sqrt(@max(1.0 - x * x, 1e-7));
+        return Vec3.multf(v1CrossV2, 0.5 * invsqrt - v);
+    }
+}
+
+fn bilinearClampSample(tex: [64 * 64]Vec4, uv_: Vec2) Vec4 {
+    const uv = uv_.clamp(Vec2.init(0.0), Vec2.init(1.0));
+
+    const tex_width: usize = 64;
+    const tex_height: usize = 64;
+
+    const tex_size = Vec2{ .x = tex_width, .y = tex_height };
+
+    var coord = uv.multv(tex_size).sub(Vec2.init(0.5));
+    coord = coord.clamp(Vec2.init(0.0), tex_size.sub(Vec2.init(1.0)));
+
+    const base = Vec2{ .x = @floor(coord.x), .y = @floor(coord.y) };
+    const frac = coord.sub(base);
+
+    const idx0_x: i32 = @intFromFloat(base.x);
+    const idx0_y: i32 = @intFromFloat(base.y);
+    const idx1_x = @min(idx0_x + 1, tex_width - 1);
+    const idx1_y = @min(idx0_y + 1, tex_height - 1);
+
+    const c00 = tex[@intCast(idx0_y * 64 + idx0_x)];
+    const c10 = tex[@intCast(idx0_y * 64 + idx1_x)];
+    const c01 = tex[@intCast(idx1_y * 64 + idx0_x)];
+    const c11 = tex[@intCast(idx1_y * 64 + idx1_x)];
+
+    const c0 = Vec4.mix(c00, c10, frac.x);
+    const c1 = Vec4.mix(c01, c11, frac.x);
+
+    return Vec4.mix(c0, c1, frac.y);
+}
+
+fn pbrBilinearSample(texture: TexturePBR, uv_: Vec2) PBR {
+    const uv = uv_.clamp(Vec2.init(0.0), Vec2.init(1.0));
+
+    const tex_size = Vec2{ .x = @floatFromInt(texture.width), .y = @floatFromInt(texture.height) };
+
+    var coord = uv.multv(tex_size).sub(Vec2.init(0.5));
+    coord = coord.clamp(Vec2.init(0.0), tex_size.sub(Vec2.init(1.0)));
+
+    const base = Vec2{ .x = @floor(coord.x), .y = @floor(coord.y) };
+    const frac = coord.sub(base);
+
+    const idx0_x: i32 = @intFromFloat(base.x);
+    const idx0_y: i32 = @intFromFloat(base.y);
+    const idx1_x = @min(idx0_x + 1, texture.width - 1);
+    const idx1_y = @min(idx0_y + 1, texture.height - 1);
+
+    const c00 = texture.buffer[@as(usize, @intCast(idx0_y)) * texture.width + @as(usize, @intCast(idx0_x))];
+    const c10 = texture.buffer[@as(usize, @intCast(idx0_y)) * texture.width + @as(usize, @intCast(idx1_x))];
+    const c01 = texture.buffer[@as(usize, @intCast(idx1_y)) * texture.width + @as(usize, @intCast(idx0_x))];
+    const c11 = texture.buffer[@as(usize, @intCast(idx1_y)) * texture.width + @as(usize, @intCast(idx1_x))];
+
+    const c0 = PBR.mix(c00, c10, @floatCast(frac.x));
+    const c1 = PBR.mix(c01, c11, @floatCast(frac.x));
+
+    return PBR.mix(c0, c1, @floatCast(frac.y));
+}
+
+const lut_size = 64.0;
+const lut_scale = (lut_size - 1.0) / lut_size;
+const lut_bias = 0.5 / lut_size;
+
+// https://github.com/b1skit/LTCAreaLightsGigi/blob/main/LTCAreaLightCS.hlsl
+fn areaLightContribution(n: Vec3, v: Vec3, p: Vec3, mInv_: Matrix4, verts: [4]Vec3) Vec3 {
+    const area_light_normal = Vec3.cross(verts[1].sub(verts[0]), verts[3].sub(verts[0]));
+    const is_behind = (Vec3.dot(verts[0].sub(p), area_light_normal) > 0.0);
+
+    const two_sided = false;
+    if (is_behind and !two_sided) {
+        return Vec3.init(0.0);
+    }
+
+    const t1 = Vec3.normalize(Vec3.sub(v, n.multf(Vec3.dot(v, n))));
+    const t2 = Vec3.normalize(Vec3.cross(n, t1));
+
+    const area_light_basis = Matrix4.transpose(Matrix4.fromVec3(t1, t2, n));
+    const minv = Matrix4.multMatrix4(mInv_, area_light_basis);
+
+    var l: [5]Vec3 = [5]Vec3{
+        Matrix4.multVec3(minv, verts[0].sub(p)),
+        Matrix4.multVec3(minv, verts[1].sub(p)),
+        Matrix4.multVec3(minv, verts[2].sub(p)),
+        Matrix4.multVec3(minv, verts[3].sub(p)),
+        Vec3.init(0.0),
+    };
+
+    var count: usize = 0;
+
+    clipQuadToHorizon(&l, &count);
+
+    if (count == 0) return Vec3.init(0.0);
+
+    l[0] = Vec3.normalize(l[0]);
+    l[1] = Vec3.normalize(l[1]);
+    l[2] = Vec3.normalize(l[2]);
+    l[3] = Vec3.normalize(l[3]);
+    l[4] = Vec3.normalize(l[4]);
+
+    var form_factor: f32 = 0.0;
+    form_factor += integrateEdge(l[0], l[1]).z;
+    form_factor += integrateEdge(l[1], l[2]).z;
+    form_factor += integrateEdge(l[2], l[3]).z;
+    if (count >= 4) {
+        form_factor += integrateEdge(l[3], l[4]).z;
+    }
+    if (count == 5) {
+        form_factor += integrateEdge(l[4], l[0]).z;
+    }
+
+    if (two_sided) {
+        form_factor = @abs(form_factor);
+    } else {
+        form_factor = @max(0.0, -form_factor);
+    }
+
+    return Vec3.init(form_factor);
+}
+
 pub var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 const allocator = arena.allocator();
 pub var frame_buffer: RenderTargetRGBA16 = undefined;
@@ -348,22 +575,25 @@ pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("cannon_01_2k/cannon_01_2k.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
-    // meshes = try Meshes.fromGLTFFile("slum/Untitled.gltf", allocator);
-    meshes = try Meshes.fromGLTFFile("junkshop/thejunkshopsplashscreen.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
+    meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
+    // meshes = try Meshes.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
     const c = meshes.cameras.items[0];
     camera_pos = c.pos;
     view_mat = c.view_matrix;
     if (c.type == .Perspective) {
-        projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 50.0);
+        projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 100.0);
     } else {
         const adjusted_xmag = c.ymag * aspect_ratio;
         projection_mat = Matrix4.orthogonalProjection(-adjusted_xmag, adjusted_xmag, c.ymag, -c.ymag, 0.1, 1000.0);
     }
 }
 
-pub fn render(_: f32, camera: usize) !void {
+pub fn render(theta: f32, camera: usize) !void {
     frame_buffer.clearColor(0.2);
     depth_buffer.clearColor(1.0);
 
@@ -373,8 +603,10 @@ pub fn render(_: f32, camera: usize) !void {
 
     // const rot_mat = Matrix4.rotateY(theta);
     for (meshes.meshes.items) |mesh| {
+        if (!mesh.should_render) continue;
         // if (std.mem.eql(u8, mesh.name, "Cube")) continue;
         // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
+        _ = theta;
         const model_mat = mesh.transform;
 
         const model_view_mat = Matrix4.multMatrix4(view_mat, model_mat);
@@ -561,8 +793,7 @@ pub fn render(_: f32, camera: usize) !void {
                                             u = @mod(u, 1.0);
                                             v = @mod(v, 1.0);
 
-                                            const tex_u: usize = @intFromFloat(u * @as(f32, @floatFromInt(active_material.pbr_texture.?.width)));
-                                            const tex_v: usize = @intFromFloat(v * @as(f32, @floatFromInt(active_material.pbr_texture.?.height)));
+                                            const tex_uv = Vec2{ .x = u, .y = v };
 
                                             const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
                                             const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
@@ -574,7 +805,7 @@ pub fn render(_: f32, camera: usize) !void {
                                             const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
                                             const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
 
-                                            const pbr = active_material.pbr_texture.?.buffer[tex_v * active_material.pbr_texture.?.width + tex_u];
+                                            const pbr = pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
                                             albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
 
                                             var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
@@ -606,55 +837,94 @@ pub fn render(_: f32, camera: usize) !void {
                                         const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
 
                                         var Lo: Vec3 = Vec3.init(0.0);
+
                                         var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
                                         f0 = Vec3.mix(f0, albedo, metallic);
 
                                         for (meshes.lights.items) |light| {
-                                            var light_dir: Vec3 = Vec3.init(0.0);
-                                            var radiance: Vec3 = Vec3.init(0.0);
+                                            if (light.type == .Area) {
+                                                const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
 
-                                            if (light.type == .Directional) {
-                                                light_dir = Vec3.normalize(light.pos);
-                                                light_dir = Vec3.multf(light_dir, -1.0);
-                                                radiance = light.color.multf(light.intensity);
+                                                var uv = Vec2{ .x = roughness, .y = @sqrt(1.0 - dotNV) };
+                                                uv = uv.multf(lut_scale).add(Vec2{ .x = lut_bias, .y = lut_bias });
+
+                                                const t1 = bilinearClampSample(LTC1, uv);
+                                                const t2 = bilinearClampSample(LTC2, uv);
+
+                                                const mInv = Matrix4.fromVec3(
+                                                    Vec3{ .x = t1.x, .y = 0.0, .z = t1.y },
+                                                    Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 },
+                                                    Vec3{ .x = t1.z, .y = 0.0, .z = t1.w },
+                                                );
+
+                                                var verts: [4]Vec3 = undefined;
+                                                // verts[0] = Matrix4.multVec3(rot_mat, light.verts.?[0]);
+                                                // verts[1] = Matrix4.multVec3(rot_mat, light.verts.?[1]);
+                                                // verts[2] = Matrix4.multVec3(rot_mat, light.verts.?[2]);
+                                                // verts[3] = Matrix4.multVec3(rot_mat, light.verts.?[3]);
+                                                verts[0] = light.verts.?[0];
+                                                verts[1] = light.verts.?[1];
+                                                verts[2] = light.verts.?[2];
+                                                verts[3] = light.verts.?[3];
+
+                                                const diffuse = areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
+                                                var specular = areaLightContribution(normal, view_dir, world, mInv, verts);
+
+                                                const fresnel = Vec3{
+                                                    .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
+                                                    .y = f0.y * t2.x + (1.0 - f0.y) * t2.y,
+                                                    .z = f0.z * t2.x + (1.0 - f0.z) * t2.y,
+                                                };
+
+                                                specular = specular.multv(fresnel);
+                                                const kD = Vec3.init(1.0 - metallic);
+
+                                                const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
+                                                const radiance = light.color;
+                                                const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
+
+                                                Lo = Lo.add(Lo1);
                                             } else {
-                                                light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
-                                                const distance = Vec3.getLength(Vec3.sub(light.pos, world));
-                                                const attenuation = 1.0 / (distance * distance + 1.0);
+                                                var light_dir: Vec3 = Vec3.init(0.0);
+                                                var radiance: Vec3 = Vec3.init(0.0);
+                                                if (light.type == .Directional) {
+                                                    light_dir = Vec3.normalize(light.pos);
+                                                    light_dir = Vec3.multf(light_dir, -1.0);
+                                                    radiance = light.color.multf(light.intensity);
+                                                } else if (light.type == .Point) {
+                                                    light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
+                                                    const distance = Vec3.getLength(Vec3.sub(light.pos, world));
+                                                    const attenuation = 1.0 / (distance * distance + 1.0);
 
-                                                radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
+                                                    radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
+                                                }
+                                                const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
+
+                                                const fresnel: Vec3 = fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
+
+                                                const normal_distr: f32 = normalDistributionGGX(normal, half_vec, roughness);
+                                                const geometryS: f32 = geometrySmith(normal, view_dir, light_dir, roughness);
+
+                                                const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
+                                                const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
+                                                const specular: Vec3 = numerator.multf(1 / denominator);
+
+                                                const kS: Vec3 = fresnel;
+                                                var kD: Vec3 = Vec3.init(1.0).sub(kS);
+
+                                                kD = kD.multf(1.0 - metallic);
+
+                                                const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+                                                const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
+                                                const Lo2 = Vec3.add(Lo1, specular);
+                                                Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
                                             }
-
-                                            const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
-
-                                            const fresnel: Vec3 = fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
-
-                                            const normal_distr: f32 = normalDistributionGGX(normal, half_vec, roughness);
-                                            const geometryS: f32 = geometrySmith(normal, view_dir, light_dir, roughness);
-
-                                            const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
-                                            const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
-                                            const specular: Vec3 = numerator.multf(1 / denominator);
-
-                                            const kS: Vec3 = fresnel;
-                                            var kD: Vec3 = Vec3.init(1.0).sub(kS);
-
-                                            kD = kD.multf(1.0 - metallic);
-
-                                            const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
-                                            const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
-                                            const Lo2 = Vec3.add(Lo1, specular);
-                                            Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
                                         }
-                                        const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
-                                        var color = Vec3.add(ambient, Lo);
+
+                                        var color = Lo;
                                         color = color.add(emissive);
                                         color = color.divv(color.add(Vec3.init(1.0)));
                                         color = color.pow(Vec3.init(1.0 / 2.2));
-
-                                        // color.x = Lo.x;
-                                        // color.y = Lo.y;
-                                        // color.z = Lo.z;
 
                                         frame_buffer.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) });
                                     }

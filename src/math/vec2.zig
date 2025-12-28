@@ -1,6 +1,15 @@
+const std = @import("std");
+
 pub const Vec2 = struct {
     x: f32 = 0.0,
     y: f32 = 0.0,
+
+    pub fn init(v: f32) Vec2 {
+        return Vec2{
+            .x = v,
+            .y = v,
+        };
+    }
 
     pub fn add(a: Vec2, b: Vec2) Vec2 {
         return Vec2{
@@ -13,6 +22,13 @@ pub const Vec2 = struct {
         return Vec2{
             .x = a.x - b.x,
             .y = a.y - b.y,
+        };
+    }
+
+    pub fn multv(a: Vec2, b: Vec2) Vec2 {
+        return Vec2{
+            .x = a.x * b.x,
+            .y = a.y * b.y,
         };
     }
 
@@ -39,6 +55,13 @@ pub const Vec2 = struct {
             a.y = a.y * inv;
         }
         return a;
+    }
+
+    pub fn clamp(value: Vec2, lower: Vec2, upper: Vec2) Vec2 {
+        return Vec2{
+            .x = std.math.clamp(value.x, lower.x, upper.x),
+            .y = std.math.clamp(value.y, lower.y, upper.y),
+        };
     }
 
     pub fn fromU32(x: u32, y: u32) Vec2 {
