@@ -320,12 +320,9 @@ pub const Scene = struct {
                 rgb[2] = material.metallic_roughness.base_color_factor[2];
 
                 var emissive_rgb: [3]f32 = [_]f32{ 0.0, 0.0, 0.0 };
-                emissive_rgb[0] = std.math.pow(f32, material.emissive_factor[0], 2.22) * (material.emissive_strength / std.math.pi);
-                emissive_rgb[1] = std.math.pow(f32, material.emissive_factor[1], 2.22) * (material.emissive_strength / std.math.pi);
-                emissive_rgb[2] = std.math.pow(f32, material.emissive_factor[2], 2.22) * (material.emissive_strength / std.math.pi);
-                // emissive_rgb[0] = material.emissive_factor[0] * material.emissive_strength;
-                // emissive_rgb[1] = material.emissive_factor[1] * material.emissive_strength;
-                // emissive_rgb[2] = material.emissive_factor[2] * material.emissive_strength;
+                emissive_rgb[0] = material.emissive_factor[0] * material.emissive_strength;
+                emissive_rgb[1] = material.emissive_factor[1] * material.emissive_strength;
+                emissive_rgb[2] = material.emissive_factor[2] * material.emissive_strength;
                 pbr_material = PBRMaterial.fromGltfConstants(
                     material.name orelse "name_less material",
                     rgb,
@@ -414,14 +411,15 @@ pub const Scene = struct {
                         } else if (light.type == .point) {
                             std.debug.print("light color: {} {} {}\n", .{ light.color[0], light.color[1], light.color[2] });
                             std.debug.print("light intensity: {}\n", .{light.intensity});
+                            std.debug.print("light range: {}\n", .{light.range});
                             try lights.append(allocator, Light{
                                 .color = Vec3{
-                                    .x = std.math.pow(f32, light.color[0], 2.22),
-                                    .y = std.math.pow(f32, light.color[1], 2.22),
-                                    .z = std.math.pow(f32, light.color[2], 2.22),
+                                    .x = light.color[0],
+                                    .y = light.color[1],
+                                    .z = light.color[2],
                                 },
                                 .pos = Vec3{ .x = node.translation[0], .y = node.translation[1], .z = node.translation[2] },
-                                .intensity = light.intensity * 0.0005,
+                                .intensity = light.intensity * 0.001,
                                 .range = light.range,
                                 .type = .Point,
                             });
