@@ -5,7 +5,7 @@ A CPU Rasterizer written in Zig during my free time for fun and to learn.
 - Texture (Bilinear sampling)
 - glTF format (W.I.P, doesn't support .glb file, PBR Textures of different sizes, spotlight, among some other things)
 
-Zig version: 0.15.1
+Zig version: 0.15.2
 
 ## Build Instructions
 
