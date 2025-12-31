@@ -34,7 +34,13 @@ zig build run -Doptimize=ReleaseFast
 
 Screenshot:
 
+The Junk Shop:
+
 ![screenshot](screenshot.png)
+
+Lumberyard Bistro:
+
+![screenshot2](screenshot2.png)
 
 <!--![screenshot2](screenshot2.png)-->
 
