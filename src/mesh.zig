@@ -114,6 +114,9 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
                     uvs[tex_coord_count] = try gltf.getDataFromBufferView(f32, allocator, accessor, binary);
                     tex_coord_count += 1;
                 },
+                .color => {
+                    std.debug.print("Color attribute found! Must color_factor by this! Not Implemented Yet!\n", .{});
+                },
                 else => {
                     std.debug.print("Found attribute but not implemented: {}\n", .{a});
                 },
@@ -256,7 +259,12 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         normal_texture_path,
         emissive_texture_path,
         material.emissive_strength,
+        material.metallic_roughness.base_color_factor,
         normal_strength,
+        material.metallic_roughness.metallic_factor,
+        material.metallic_roughness.roughness_factor,
+        material.emissive_factor,
+        material.alpha_cutoff,
         allocator,
     );
 

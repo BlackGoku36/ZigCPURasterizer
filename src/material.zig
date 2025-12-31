@@ -23,20 +23,28 @@ pub const Material = struct {
         normal_path: ?[]const u8,
         emissive_path: ?[]const u8,
         emissive_strength: f32,
+        color_factor: [4]f32,
         normal_scale: f32,
+        metallic_factor: f32,
+        roughness_factor: f32,
+        emissive_factor: [3]f32,
+        alpha_cutoff: f32,
         allocator: std.mem.Allocator,
     ) Material {
         var mat: TexturePBR = undefined;
         if (TexturePBR.loadTextureFromDescriptor(PBRTextureDescriptor{
             .albedo_tex_path = diffuse_path,
             .normal_tex_path = normal_path,
-            .metallic_tex_path = metalness_roughness_path,
-            .roughness_tex_path = metalness_roughness_path,
-            //TODO: It doesn't support AO even when material have AO Map
-            .occlusion_tex_path = null,
+            .rm_tex_path = metalness_roughness_path,
+            // .occlusion_tex_path = null,
             .emissive_tex_path = emissive_path,
             .emissive_strength = emissive_strength,
+            .color_factor = color_factor,
             .normal_scale = normal_scale,
+            .metallic_factor = metallic_factor,
+            .roughness_factor = roughness_factor,
+            .emissive_factor = emissive_factor,
+            .alpha_cutoff = alpha_cutoff,
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {

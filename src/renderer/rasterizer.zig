@@ -578,9 +578,9 @@ pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
-    scene = try Scene.fromGLTFFile("assets/junkshop/thejunkshopsplashscreen.gltf", allocator);
+    scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
-    // meshes = try Meshes.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
     const c = scene.cameras.items[0];
@@ -766,8 +766,6 @@ pub fn render(theta: f32, camera: usize) !void {
                                     const z = (area1 * new_tri.v0.position.z + area2 * new_tri.v1.position.z + area0 * new_tri.v2.position.z);
 
                                     if (z < depth_buffer.getPixel(x, y)) {
-                                        depth_buffer.putPixel(x, y, @floatCast(z));
-
                                         const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
                                         const w: f32 = 1 / one_over_w;
 
@@ -780,7 +778,7 @@ pub fn render(theta: f32, camera: usize) !void {
                                         var normal: Vec3 = Vec3.init(0.0);
                                         var metallic: f32 = 0.0;
                                         var roughness: f32 = 0.0;
-                                        var ao: f32 = 0.0;
+                                        // var ao: f32 = 0.0;
 
                                         var emissive: Vec3 = Vec3.init(0.0);
 
@@ -807,6 +805,10 @@ pub fn render(theta: f32, camera: usize) !void {
                                             const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
 
                                             const pbr = pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
+                                            if (pbr.albedo.w < 0.1) {
+                                                continue;
+                                            }
+
                                             albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
 
                                             var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
@@ -814,18 +816,21 @@ pub fn render(theta: f32, camera: usize) !void {
 
                                             metallic = @floatCast(pbr.metallic);
                                             roughness = @floatCast(pbr.roughness);
-                                            ao = @floatCast(pbr.ao);
+                                            // ao = @floatCast(pbr.ao);
                                             emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
 
-                                            normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
-                                            normal = Vec3.normalize(normal);
+                                            normal = frag_normal;
+                                            if (active_material.pbr_texture.?.normal) {
+                                                normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
+                                                normal = Vec3.normalize(normal);
+                                            }
                                         } else {
                                             const pbr_solid = active_material.pbr_solid.?;
                                             albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
                                             normal = frag_normal;
                                             metallic = @floatCast(pbr_solid.metallic);
                                             roughness = @floatCast(pbr_solid.roughness);
-                                            ao = @floatCast(pbr_solid.ao);
+                                            // ao = @floatCast(pbr_solid.ao);
 
                                             emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
                                         }
@@ -921,14 +926,16 @@ pub fn render(theta: f32, camera: usize) !void {
                                                 Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
                                             }
                                         }
+
                                         // const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
                                         // var color = Vec3.add(ambient, Lo);
                                         var color = Lo;
                                         color = color.add(emissive);
                                         color = color.divv(color.add(Vec3.init(1.0)));
-                                        color = color.pow(Vec3.init(1.0 / 2.2));
+                                        const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
 
-                                        frame_buffer.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) });
+                                        frame_buffer.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) });
+                                        depth_buffer.putPixel(x, y, @floatCast(z));
                                     }
                                 }
                                 w_x0 += dy0;
