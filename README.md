@@ -38,9 +38,9 @@ The Junk Shop:
 
 ![screenshot](screenshot.png)
 
-Lumberyard Bistro:
+<!--Lumberyard Bistro:-->
 
-![screenshot2](screenshot2.png)
+<!--![screenshot2](screenshot2.png)-->
 
 <!--![screenshot2](screenshot2.png)-->
 
