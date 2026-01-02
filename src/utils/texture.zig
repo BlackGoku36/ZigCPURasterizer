@@ -39,6 +39,7 @@ pub const PBR = struct {
     roughness: f16,
     ao: f16,
     emissive: RGB,
+    transmission: f16,
 
     pub fn mix(start: PBR, end: PBR, t: f16) PBR {
         return PBR{
@@ -49,6 +50,7 @@ pub const PBR = struct {
             .metallic = start.metallic * (1 - t) + end.metallic * t,
             .roughness = start.roughness * (1 - t) + end.roughness * t,
             .ao = start.ao * (1 - t) + end.ao * t,
+            .transmission = start.transmission * (1 - t) + end.transmission * t,
         };
     }
 };
@@ -59,6 +61,7 @@ pub const PBRSolid = struct {
     roughness: f16,
     ao: f16,
     emissive: RGB,
+    transmission: f16,
 };
 
 pub const TextureType = enum { Seperate, RMPacked, ARMPacked };
@@ -69,6 +72,7 @@ pub const PBRTextureDescriptor = struct {
     rm_tex_path: ?[]const u8,
     // occlusion_tex_path: ?[]const u8,
     emissive_tex_path: ?[]const u8,
+    transmission_tex_path: ?[]const u8,
     emissive_strength: f32,
     color_factor: [4]f32,
     normal_scale: f32,
@@ -76,6 +80,7 @@ pub const PBRTextureDescriptor = struct {
     roughness_factor: f32,
     emissive_factor: [3]f32,
     alpha_cutoff: f32,
+    transmission_factor: f32,
 };
 
 pub const TexturePBR = struct {
@@ -112,6 +117,7 @@ pub const TexturePBR = struct {
         var normal_file: ?std.fs.File = null;
         var rm_file: ?std.fs.File = null;
         var emissive_file: ?std.fs.File = null;
+        var transmission_file: ?std.fs.File = null;
 
         if (desc.albedo_tex_path) |albedo_tex_path| {
             std.debug.print("Albedo file path: {s}\n", .{albedo_tex_path});
@@ -130,11 +136,16 @@ pub const TexturePBR = struct {
             std.debug.print("Emissive file path: {s}\n", .{emissive_tex_path});
             emissive_file = getFileFromPath(emissive_tex_path);
         }
+        if (desc.transmission_tex_path) |transmission_tex_path| {
+            std.debug.print("Transmission file path: {s}\n", .{transmission_tex_path});
+            transmission_file = getFileFromPath(transmission_tex_path);
+        }
 
         var albedo_tex: ?zigimg.Image = null;
         var normal_tex: ?zigimg.Image = null;
         var rm_tex: ?zigimg.Image = null;
         var emissive_tex: ?zigimg.Image = null;
+        var transmission_tex: ?zigimg.Image = null;
 
         var albedo_width: usize = 0;
         var albedo_height: usize = 0;
@@ -144,6 +155,8 @@ pub const TexturePBR = struct {
         var rm_height: usize = 0;
         var emissive_width: usize = 0;
         var emissive_height: usize = 0;
+        var transmission_width: usize = 0;
+        var transmission_height: usize = 0;
 
         if (albedo_file) |file| {
             var tex = try zigimg.Image.fromFile(allocator, file, texture_read_buffer[0..]);
@@ -177,12 +190,20 @@ pub const TexturePBR = struct {
             try tex.convert(allocator, zigimg.PixelFormat.rgb24);
             emissive_tex = tex;
         }
+        if (transmission_file) |file| {
+            var tex = try zigimg.Image.fromFile(allocator, file, texture_read_buffer[0..]);
+
+            transmission_width = tex.width;
+            transmission_height = tex.height;
+            try tex.convert(allocator, zigimg.PixelFormat.grayscale16);
+            transmission_tex = tex;
+        }
 
         var alloc_width: usize = 0;
         var alloc_height: usize = 0;
 
-        alloc_width = @max(albedo_width, normal_width, rm_width, emissive_width);
-        alloc_height = @max(albedo_height, normal_height, rm_height, emissive_height);
+        alloc_width = @max(albedo_width, normal_width, rm_width, emissive_width, transmission_width);
+        alloc_height = @max(albedo_height, normal_height, rm_height, emissive_height, transmission_height);
 
         var _buffer: []PBR = undefined;
 
@@ -212,6 +233,7 @@ pub const TexturePBR = struct {
                     _buffer[out_index].metallic = @floatCast(desc.metallic_factor);
                     _buffer[out_index].roughness = @floatCast(desc.roughness_factor);
                     _buffer[out_index].ao = 1.0;
+                    _buffer[out_index].transmission = 0.0;
                     _buffer[out_index].emissive = RGB{
                         .x = @floatCast(desc.emissive_factor[0] * desc.emissive_strength),
                         .y = @floatCast(desc.emissive_factor[1] * desc.emissive_strength),
@@ -265,6 +287,23 @@ pub const TexturePBR = struct {
                     _buffer[out_index].emissive.x = @floatCast(linear[0] * desc.emissive_factor[0] * desc.emissive_strength);
                     _buffer[out_index].emissive.y = @floatCast(linear[1] * desc.emissive_factor[1] * desc.emissive_strength);
                     _buffer[out_index].emissive.z = @floatCast(linear[2] * desc.emissive_factor[2] * desc.emissive_strength);
+                }
+            }
+        }
+
+        if (transmission_tex) |img| {
+            for (0..transmission_width) |x| {
+                for (0..transmission_height) |y| {
+                    const sample_index = @mod(y, transmission_height) * transmission_width + @mod(x, transmission_width);
+                    // TODO: To gamma or not to gamma
+                    const opacity = img.pixels.grayscale16[sample_index].toColorf32().r;
+                    // const opacity = img.pixels.grayscale16[sample_index];
+                    // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.grayscale(opacity)).to.float4();
+
+                    const out_index = y * transmission_width + x;
+                    // We flip the opacity because that what "The Junk Shop" does.
+                    // TODO: Check with other scene
+                    _buffer[out_index].transmission = @floatCast(1.0 - opacity);
                 }
             }
         }

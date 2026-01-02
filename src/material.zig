@@ -22,6 +22,7 @@ pub const Material = struct {
         metalness_roughness_path: ?[]const u8,
         normal_path: ?[]const u8,
         emissive_path: ?[]const u8,
+        transmission_path: ?[]const u8,
         emissive_strength: f32,
         color_factor: [4]f32,
         normal_scale: f32,
@@ -29,6 +30,7 @@ pub const Material = struct {
         roughness_factor: f32,
         emissive_factor: [3]f32,
         alpha_cutoff: f32,
+        transmission_factor: f32,
         allocator: std.mem.Allocator,
     ) Material {
         var mat: TexturePBR = undefined;
@@ -38,6 +40,7 @@ pub const Material = struct {
             .rm_tex_path = metalness_roughness_path,
             // .occlusion_tex_path = null,
             .emissive_tex_path = emissive_path,
+            .transmission_tex_path = transmission_path,
             .emissive_strength = emissive_strength,
             .color_factor = color_factor,
             .normal_scale = normal_scale,
@@ -45,6 +48,7 @@ pub const Material = struct {
             .roughness_factor = roughness_factor,
             .emissive_factor = emissive_factor,
             .alpha_cutoff = alpha_cutoff,
+            .transmission_factor = transmission_factor,
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {
@@ -60,7 +64,15 @@ pub const Material = struct {
         };
     }
 
-    pub fn fromGltfConstants(name: []const u8, rgb: [3]f32, metallic: f32, roughness: f32, ao: f32, emissive_rgb: [3]f32) Material {
+    pub fn fromGltfConstants(
+        name: []const u8,
+        rgb: [3]f32,
+        metallic: f32,
+        roughness: f32,
+        ao: f32,
+        emissive_rgb: [3]f32,
+        transmission: f32,
+    ) Material {
         return Material{
             .pbr_solid = PBRSolid{
                 .albedo = RGB{ .x = @floatCast(rgb[0]), .y = @floatCast(rgb[1]), .z = @floatCast(rgb[2]) },
@@ -68,6 +80,7 @@ pub const Material = struct {
                 .roughness = @floatCast(roughness),
                 .ao = @floatCast(ao),
                 .emissive = RGB{ .x = @floatCast(emissive_rgb[0]), .y = @floatCast(emissive_rgb[1]), .z = @floatCast(emissive_rgb[2]) },
+                .transmission = @floatCast(transmission),
             },
             .pbr_texture = null,
             .name = name,

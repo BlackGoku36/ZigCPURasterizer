@@ -69,6 +69,15 @@ pub const RenderTargetRGBA16 = struct {
         self.allocator.free(self.buffer);
     }
 
+    pub fn getPixel(self: *RenderTargetRGBA16, x: u32, y: u32) Color {
+        var color: Color = undefined;
+        color.r = self.buffer[y * 4 * self.width + (x * 4 + 0)];
+        color.g = self.buffer[y * 4 * self.width + (x * 4 + 1)];
+        color.b = self.buffer[y * 4 * self.width + (x * 4 + 2)];
+
+        return color;
+    }
+
     pub fn putPixel(self: *RenderTargetRGBA16, x: u32, y: u32, color: Color) void {
         self.buffer[y * 4 * self.width + (x * 4 + 0)] = color.r;
         self.buffer[y * 4 * self.width + (x * 4 + 1)] = color.g;

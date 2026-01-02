@@ -70,7 +70,16 @@ pub fn getMatrixFromNode(node: Gltf.Node, parent_matrix: Matrix4) Matrix4 {
     return Matrix4.multMatrix4(parent_matrix, mat);
 }
 
-pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix: Matrix4, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
+pub fn getMeshFromNode(
+    gltf: Gltf,
+    binary: []u8,
+    node: Gltf.Node,
+    parent_matrix: Matrix4,
+    // materials: std.ArrayList(PBRMaterial),
+    opaque_meshes: *std.ArrayList(Mesh),
+    transcluent_meshes: *std.ArrayList(Mesh),
+    allocator: std.mem.Allocator,
+) !void {
     const m = gltf.data.meshes[node.mesh.?];
 
     //TODO: Free this memory
@@ -170,21 +179,50 @@ pub fn getMeshFromNode(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix:
             new_normals[idx3 * 3 + 2] += cross.z;
         }
 
-        try meshes.append(allocator, Mesh{
-            .vertices = vertices,
-            .uvs = uvs,
-            .uvs_count = tex_coord_count,
-            .normals = new_normals,
-            .indices_16 = indices_16,
-            .indices_32 = indices_32,
-            .name = name,
-            .transform = transform,
-            .material = p.material,
-        });
+        // if (p.material) |material| {
+        const material = gltf.data.materials[p.material.?];
+        if (material.transmission_factor > 0.0 or material.transmission_texture != null) {
+            try transcluent_meshes.append(allocator, Mesh{
+                .vertices = vertices,
+                .uvs = uvs,
+                .uvs_count = tex_coord_count,
+                .normals = new_normals,
+                .indices_16 = indices_16,
+                .indices_32 = indices_32,
+                .name = name,
+                .transform = transform,
+                .material = p.material,
+            });
+        } else {
+            try opaque_meshes.append(allocator, Mesh{
+                .vertices = vertices,
+                .uvs = uvs,
+                .uvs_count = tex_coord_count,
+                .normals = new_normals,
+                .indices_16 = indices_16,
+                .indices_32 = indices_32,
+                .name = name,
+                .transform = transform,
+                .material = p.material,
+            });
+        }
+        // }
+
+        // try meshes.append(allocator, Mesh{
+        //     .vertices = vertices,
+        //     .uvs = uvs,
+        //     .uvs_count = tex_coord_count,
+        //     .normals = new_normals,
+        //     .indices_16 = indices_16,
+        //     .indices_32 = indices_32,
+        //     .name = name,
+        //     .transform = transform,
+        //     .material = p.material,
+        // });
     }
 }
 
-pub fn traverseGLTFNodes(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix: Matrix4, meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
+pub fn traverseGLTFNodes(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matrix: Matrix4, opaque_meshes: *std.ArrayList(Mesh), transcluent_meshes: *std.ArrayList(Mesh), allocator: std.mem.Allocator) !void {
     const children = node.children;
 
     const transform = getMatrixFromNode(node, parent_matrix);
@@ -192,9 +230,9 @@ pub fn traverseGLTFNodes(gltf: Gltf, binary: []u8, node: Gltf.Node, parent_matri
     for (children) |child| {
         const child_node = gltf.data.nodes[child];
         if (child_node.mesh) |_| {
-            try getMeshFromNode(gltf, binary, child_node, transform, meshes, allocator);
+            try getMeshFromNode(gltf, binary, child_node, transform, opaque_meshes, transcluent_meshes, allocator);
         }
-        try traverseGLTFNodes(gltf, binary, child_node, transform, meshes, allocator);
+        try traverseGLTFNodes(gltf, binary, child_node, transform, opaque_meshes, transcluent_meshes, allocator);
     }
 }
 
@@ -204,6 +242,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     var normal_texture_path: ?[]u8 = null;
     var occlusion_texture_path: ?[]u8 = null;
     var emissive_texture_path: ?[]u8 = null;
+    var transmission_texture_path: ?[]u8 = null;
 
     if (material.metallic_roughness.base_color_texture) |color_texture| {
         const color_texture_idx = color_texture.index;
@@ -231,6 +270,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         normal_strength = normal_texture.scale;
     }
 
+    //TODO: Unused
     if (material.occlusion_texture) |occlusion_texture| {
         const texture_idx = occlusion_texture.index;
         const occlusion_texture_source_idx = gltf.data.textures[texture_idx].source.?;
@@ -247,17 +287,27 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         emissive_texture_path = std.Uri.percentDecodeInPlace(emissive_texture_path.?);
     }
 
+    if (material.transmission_texture) |transmission_texture| {
+        const texture_idx = transmission_texture.index;
+        const transmission_texture_source_idx = gltf.data.textures[texture_idx].source.?;
+        const transmission_texture_uri = gltf.data.images[transmission_texture_source_idx].uri.?;
+        transmission_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, transmission_texture_uri });
+        transmission_texture_path = std.Uri.percentDecodeInPlace(transmission_texture_path.?);
+    }
+
     std.debug.print("Has Color Texture: {}\n", .{color_texture_path != null});
     std.debug.print("Has Metallic-Roughness Texture: {}\n", .{metallic_rougness_texture_path != null});
     std.debug.print("Has Normal Texture: {}\n", .{normal_texture_path != null});
     std.debug.print("Has Occlusion Texture: {}\n", .{occlusion_texture_path != null});
     std.debug.print("Has Emissive Texture: {}\n", .{emissive_texture_path != null});
+    std.debug.print("Has Transmission Texture: {}\n", .{transmission_texture_path != null});
 
     var pbr_material = PBRMaterial.fromGltfTextureFiles(
         color_texture_path,
         metallic_rougness_texture_path,
         normal_texture_path,
         emissive_texture_path,
+        transmission_texture_path,
         material.emissive_strength,
         material.metallic_roughness.base_color_factor,
         normal_strength,
@@ -265,6 +315,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         material.metallic_roughness.roughness_factor,
         material.emissive_factor,
         material.alpha_cutoff,
+        material.transmission_factor,
         allocator,
     );
 
@@ -276,12 +327,14 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     if (normal_texture_path) |texture_path| allocator.free(texture_path);
     if (occlusion_texture_path) |texture_path| allocator.free(texture_path);
     if (emissive_texture_path) |texture_path| allocator.free(texture_path);
+    if (transmission_texture_path) |texture_path| allocator.free(texture_path);
 
     return pbr_material;
 }
 
 pub const Scene = struct {
-    meshes: std.ArrayList(Mesh),
+    opaque_meshes: std.ArrayList(Mesh),
+    translucent_meshes: std.ArrayList(Mesh),
     // TODO: Move this out of here
     materials: std.ArrayList(PBRMaterial),
     lights: std.ArrayList(Light),
@@ -290,7 +343,8 @@ pub const Scene = struct {
     pub fn fromGLTFFile(fileName: []const u8, allocator: std.mem.Allocator) !Scene {
         const parent_path = std.fs.path.dirname(fileName).?;
 
-        var meshes: std.ArrayList(Mesh) = .{};
+        var opaque_meshes: std.ArrayList(Mesh) = .{};
+        var translucent_meshes: std.ArrayList(Mesh) = .{};
         var materials: std.ArrayList(PBRMaterial) = .{};
         var lights: std.ArrayList(Light) = .{};
         var cameras: std.ArrayList(Camera) = .{};
@@ -338,6 +392,7 @@ pub const Scene = struct {
                     material.metallic_roughness.roughness_factor,
                     0.1,
                     emissive_rgb,
+                    material.transmission_factor,
                 );
             }
 
@@ -352,11 +407,11 @@ pub const Scene = struct {
                     const matrix = Matrix4.getIdentity();
 
                     if (node.mesh) |_| {
-                        try getMeshFromNode(gltf, binary, node, matrix, &meshes, allocator);
+                        try getMeshFromNode(gltf, binary, node, matrix, &opaque_meshes, &translucent_meshes, allocator);
                         if (node.name) |node_name| {
                             if (std.mem.startsWith(u8, node_name, "arealight_")) {
-                                const m = meshes.items[@as(u32, @intCast(meshes.items.len)) - 1];
-                                meshes.items[@as(u32, @intCast(meshes.items.len)) - 1].should_render = false;
+                                const m = opaque_meshes.items[@as(u32, @intCast(opaque_meshes.items.len)) - 1];
+                                opaque_meshes.items[@as(u32, @intCast(opaque_meshes.items.len)) - 1].should_render = false;
 
                                 var area_idx1: usize = 0;
                                 var area_idx2: usize = 0;
@@ -489,7 +544,7 @@ pub const Scene = struct {
                         }
                     }
 
-                    try traverseGLTFNodes(gltf, binary, node, matrix, &meshes, allocator);
+                    try traverseGLTFNodes(gltf, binary, node, matrix, &opaque_meshes, &translucent_meshes, allocator);
                 }
             }
         }
@@ -514,7 +569,8 @@ pub const Scene = struct {
             });
         }
         return Scene{
-            .meshes = meshes,
+            .opaque_meshes = opaque_meshes,
+            .translucent_meshes = translucent_meshes,
             .materials = materials,
             .lights = lights,
             .cameras = cameras,
@@ -527,7 +583,7 @@ pub const Scene = struct {
         }
         meshes.materials.deinit(allocator);
 
-        for (meshes.meshes.items) |mesh| {
+        for (meshes.opaque_meshes.items) |mesh| {
             allocator.free(mesh.vertices);
             allocator.free(mesh.normals);
             for (0..mesh.uvs_count) |i| {
@@ -539,7 +595,20 @@ pub const Scene = struct {
                 allocator.free(mesh.indices_32.?);
             }
         }
-        meshes.meshes.deinit(allocator);
+        for (meshes.translucent_meshes.items) |mesh| {
+            allocator.free(mesh.vertices);
+            allocator.free(mesh.normals);
+            for (0..mesh.uvs_count) |i| {
+                allocator.free(mesh.uvs[i]);
+            }
+            if (mesh.indices_16) |indices| {
+                allocator.free(indices);
+            } else {
+                allocator.free(mesh.indices_32.?);
+            }
+        }
+        meshes.opaque_meshes.deinit(allocator);
+        meshes.translucent_meshes.deinit(allocator);
         meshes.lights.deinit(allocator);
         meshes.cameras.deinit(allocator);
     }
