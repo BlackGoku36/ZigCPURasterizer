@@ -316,6 +316,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         material.emissive_factor,
         material.alpha_cutoff,
         material.transmission_factor,
+        material.ior,
         allocator,
     );
 
@@ -372,8 +373,12 @@ pub const Scene = struct {
 
         for (gltf.data.materials) |material| {
             std.debug.print("Material Name: {s}\n", .{material.name orelse "name_less"});
+            //TODO: Handle "double sided" property
             var pbr_material: PBRMaterial = undefined;
-            if (material.metallic_roughness.base_color_texture != null) {
+            if (material.metallic_roughness.base_color_texture != null or
+                material.metallic_roughness.metallic_roughness_texture != null or
+                material.normal_texture != null)
+            {
                 pbr_material = try getTexturedMaterialGltf(gltf, material, parent_path, allocator);
             } else {
                 var rgb: [3]f32 = [_]f32{ 0.0, 0.0, 0.0 };
@@ -393,6 +398,7 @@ pub const Scene = struct {
                     0.1,
                     emissive_rgb,
                     material.transmission_factor,
+                    material.ior,
                 );
             }
 

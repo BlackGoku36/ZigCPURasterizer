@@ -31,6 +31,7 @@ pub const Material = struct {
         emissive_factor: [3]f32,
         alpha_cutoff: f32,
         transmission_factor: f32,
+        ior: f32,
         allocator: std.mem.Allocator,
     ) Material {
         var mat: TexturePBR = undefined;
@@ -49,6 +50,7 @@ pub const Material = struct {
             .emissive_factor = emissive_factor,
             .alpha_cutoff = alpha_cutoff,
             .transmission_factor = transmission_factor,
+            .ior = ior,
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {
@@ -72,6 +74,7 @@ pub const Material = struct {
         ao: f32,
         emissive_rgb: [3]f32,
         transmission: f32,
+        ior: f32,
     ) Material {
         return Material{
             .pbr_solid = PBRSolid{
@@ -81,6 +84,7 @@ pub const Material = struct {
                 .ao = @floatCast(ao),
                 .emissive = RGB{ .x = @floatCast(emissive_rgb[0]), .y = @floatCast(emissive_rgb[1]), .z = @floatCast(emissive_rgb[2]) },
                 .transmission = @floatCast(transmission),
+                .ior = @floatCast(ior),
             },
             .pbr_texture = null,
             .name = name,

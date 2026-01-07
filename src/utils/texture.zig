@@ -40,6 +40,7 @@ pub const PBR = struct {
     ao: f16,
     emissive: RGB,
     transmission: f16,
+    ior: f16,
 
     pub fn mix(start: PBR, end: PBR, t: f16) PBR {
         return PBR{
@@ -51,6 +52,7 @@ pub const PBR = struct {
             .roughness = start.roughness * (1 - t) + end.roughness * t,
             .ao = start.ao * (1 - t) + end.ao * t,
             .transmission = start.transmission * (1 - t) + end.transmission * t,
+            .ior = start.ior * (1 - t) + end.ior * t,
         };
     }
 };
@@ -62,6 +64,7 @@ pub const PBRSolid = struct {
     ao: f16,
     emissive: RGB,
     transmission: f16,
+    ior: f16,
 };
 
 pub const TextureType = enum { Seperate, RMPacked, ARMPacked };
@@ -81,6 +84,7 @@ pub const PBRTextureDescriptor = struct {
     emissive_factor: [3]f32,
     alpha_cutoff: f32,
     transmission_factor: f32,
+    ior: f32,
 };
 
 pub const TexturePBR = struct {
@@ -209,6 +213,26 @@ pub const TexturePBR = struct {
 
         if (allocator.alloc(PBR, alloc_width * alloc_height)) |_buf| {
             _buffer = _buf;
+            var basics_pbr: PBR = undefined;
+            basics_pbr.albedo = RGBA{
+                .x = @floatCast(desc.color_factor[0]),
+                .y = @floatCast(desc.color_factor[1]),
+                .z = @floatCast(desc.color_factor[2]),
+                .w = @floatCast(desc.color_factor[3]),
+            };
+            const normal = Vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+            basics_pbr.normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
+            basics_pbr.emissive = RGB{
+                .x = @floatCast(desc.emissive_factor[0] * desc.emissive_strength),
+                .y = @floatCast(desc.emissive_factor[1] * desc.emissive_strength),
+                .z = @floatCast(desc.emissive_factor[2] * desc.emissive_strength),
+            };
+            basics_pbr.transmission = @floatCast(desc.transmission_factor);
+            basics_pbr.metallic = @floatCast(desc.metallic_factor);
+            basics_pbr.roughness = @floatCast(desc.roughness_factor);
+            basics_pbr.ao = 1.0;
+            basics_pbr.ior = @floatCast(desc.ior);
+            @memset(_buffer, basics_pbr);
         } else |err| {
             std.debug.panic("Error allocating texture: {any}\n", .{err});
         }
@@ -230,10 +254,10 @@ pub const TexturePBR = struct {
                         .w = @floatCast(linear[3] * desc.color_factor[3]),
                     };
                     _buffer[out_index].normal = RGB{ .x = @floatCast(normal.x), .y = @floatCast(normal.y), .z = @floatCast(normal.z) };
-                    _buffer[out_index].metallic = @floatCast(desc.metallic_factor);
-                    _buffer[out_index].roughness = @floatCast(desc.roughness_factor);
-                    _buffer[out_index].ao = 1.0;
-                    _buffer[out_index].transmission = 0.0;
+                    // _buffer[out_index].metallic = @floatCast(desc.metallic_factor);
+                    // _buffer[out_index].roughness = @floatCast(desc.roughness_factor);
+                    // _buffer[out_index].ao = 1.0;
+                    // _buffer[out_index].transmission = 0.0;
                     _buffer[out_index].emissive = RGB{
                         .x = @floatCast(desc.emissive_factor[0] * desc.emissive_strength),
                         .y = @floatCast(desc.emissive_factor[1] * desc.emissive_strength),

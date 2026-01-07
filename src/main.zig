@@ -134,7 +134,7 @@ export fn frame() void {
     time_accum += interval;
 
     var fb_image_data: sg.ImageData = .{};
-    fb_image_data.mip_levels[0] = sg.asRange(rasterizer.frame_buffer.buffer);
+    fb_image_data.mip_levels[0] = sg.asRange(rasterizer.opaque_fb.buffer);
     sg.updateImage(state.fb_image, fb_image_data);
 
     var db_image_data: sg.ImageData = .{};

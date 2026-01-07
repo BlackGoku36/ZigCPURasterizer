@@ -116,6 +116,14 @@ pub const Vec3 = struct {
         return out;
     }
 
+    pub fn refract(i: Vec3, n: Vec3, eta: f32) Vec3 {
+        // https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml
+        const dotNI = dot(n, i);
+        const k = 1.0 - eta * eta * (1.0 - dotNI * dotNI);
+        if (k < 0.0) return init(0.0);
+        return sub(i.multf(eta), n.multf(eta * dotNI + std.math.sqrt(k)));
+    }
+
     pub fn ndlToRaster(a: Vec3, width: f32, height: f32) Vec3 {
         var out_vec = Vec3{};
         out_vec.x = (a.x + 1.0) * width * 0.5;

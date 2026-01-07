@@ -32,10 +32,10 @@ const ltc = @import("ltc_lut.zig");
 const LTC1 = ltc.LTC1Vec;
 const LTC2 = ltc.LTC2Vec;
 
-pub const width = 1280;
-pub const height = 720;
-// pub const width = 1500;
-// pub const height = 750;
+// pub const width = 1280;
+// pub const height = 720;
+pub const width = 1500;
+pub const height = 750;
 
 const WindingOrder = enum { CW, CCW };
 const ClippingPlane = enum(u8) { NEAR, FAR, LEFT, RIGHT, TOP, BOTTOM };
@@ -563,7 +563,8 @@ fn areaLightContribution(n: Vec3, v: Vec3, p: Vec3, mInv_: Matrix4, verts: [4]Ve
 
 pub var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 const allocator = arena.allocator();
-pub var frame_buffer: RenderTargetRGBA16 = undefined;
+pub var opaque_fb: RenderTargetRGBA16 = undefined;
+pub var transcluent_fb: RenderTargetRGBA16 = undefined;
 pub var depth_buffer: RenderTargetR16 = undefined;
 
 var scene: Scene = undefined;
@@ -590,8 +591,10 @@ pub fn init() !void {
     // scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
-    scene = try Scene.fromGLTFFile("assets/transparency_test/Untitled.gltf", allocator);
-    frame_buffer = RenderTargetRGBA16.create(allocator, width, height);
+    // scene = try Scene.fromGLTFFile("assets/transparency_test/Untitled.gltf", allocator);
+    scene = try Scene.fromGLTFFile("assets/bust/Untitled.gltf", allocator);
+    opaque_fb = RenderTargetRGBA16.create(allocator, width, height);
+    transcluent_fb = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
     const c = scene.cameras.items[0];
     camera_pos = c.pos;
@@ -633,6 +636,7 @@ pub fn process_meshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
                     .ao = 0.1,
                     .emissive = RGB{ .x = 1.0, .y = 1.0, .z = 1.0 },
                     .transmission = 0.0,
+                    .ior = 1.5,
                 },
                 .pbr_texture = null,
                 .name = "Material Less",
@@ -751,6 +755,7 @@ pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
                     .ao = 0.1,
                     .emissive = RGB{ .x = 1.0, .y = 1.0, .z = 1.0 },
                     .transmission = 1.0,
+                    .ior = 1.5,
                 },
                 .pbr_texture = null,
                 .name = "Material Less",
@@ -1053,7 +1058,7 @@ pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
                                         color = color.divv(color.add(Vec3.init(1.0)));
                                         const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
 
-                                        frame_buffer.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) });
+                                        opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
                                         depth_buffer.putPixel(x, y, @floatCast(z));
                                     }
                                 }
@@ -1072,7 +1077,7 @@ pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
     }
 }
 
-pub fn render_transcluent_meshes() !void {
+pub fn render_transcluent_meshes(view_projection_mat: Matrix4) !void {
     for (tris.items) |tri| {
         const active_material = scene.materials.items[tri.material_idx];
 
@@ -1135,11 +1140,12 @@ pub fn render_transcluent_meshes() !void {
                                 var normal: Vec3 = Vec3.init(0.0);
                                 var metallic: f32 = 0.0;
                                 var roughness: f32 = 0.0;
-                                // var ao: f32 = 0.0;
+                                // const ao: f32 = 0.1;
 
                                 var emissive: Vec3 = Vec3.init(0.0);
 
                                 var transmission: f16 = 0.0;
+                                var ior: f16 = 1.5;
 
                                 if (active_material.type == .Textured) {
                                     var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
@@ -1184,6 +1190,7 @@ pub fn render_transcluent_meshes() !void {
                                         normal = Vec3.normalize(normal);
                                     }
                                     transmission = pbr.transmission;
+                                    ior = pbr.ior;
                                 } else {
                                     const pbr_solid = active_material.pbr_solid.?;
                                     albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
@@ -1194,6 +1201,7 @@ pub fn render_transcluent_meshes() !void {
 
                                     emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
                                     transmission = pbr_solid.transmission;
+                                    ior = pbr_solid.ior;
                                 }
 
                                 const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
@@ -1205,8 +1213,30 @@ pub fn render_transcluent_meshes() !void {
 
                                 var Lo: Vec3 = Vec3.init(0.0);
 
-                                var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
+                                // var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
+                                var f0 = Vec3.init(std.math.pow(f32, (ior - 1.0) / (ior + 1.0), 2.0));
                                 f0 = Vec3.mix(f0, albedo, metallic);
+
+                                const eta = 1.0 / ior;
+                                //TODO: Improve this refraction code?
+                                const r = Vec3.refract(view_dir.multf(-1.0), normal, eta);
+                                // const thickness = 1.5;
+                                const thickness = @abs(depth_buffer.getPixel(x, y) - z) * 500.0;
+
+                                const new_r = Matrix4.multVec3(view_projection_mat, r);
+
+                                var uv_offset = Vec2{ .x = new_r.x * thickness, .y = new_r.y * thickness };
+                                // var uv_offset = Vec2{ .x = 0.0, .y = 0.0 };
+
+                                uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
+                                uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
+
+                                const sample_pos_x = std.math.clamp(x + @as(u32, @intFromFloat(uv_offset.x)), 0, opaque_fb.width);
+                                const sample_pos_y = std.math.clamp(y + @as(u32, @intFromFloat(uv_offset.y)), 0, opaque_fb.height);
+
+                                const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
+                                const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
+                                const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
 
                                 for (scene.lights.items) |light| {
                                     if (light.type == .Area) {
@@ -1236,6 +1266,7 @@ pub fn render_transcluent_meshes() !void {
 
                                         const diffuse = areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
                                         var specular = areaLightContribution(normal, view_dir, world, mInv, verts);
+                                        const transmitted = areaLightContribution(normal.multf(-1.0), view_dir, world, Matrix4.getIdentity(), verts);
 
                                         const fresnel = Vec3{
                                             .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
@@ -1247,10 +1278,15 @@ pub fn render_transcluent_meshes() !void {
                                         const kD = Vec3.init(1.0 - metallic);
 
                                         const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
+                                        const l_transmitted = kD.multv(albedo.multv(bg_color).multv(transmitted));
                                         const radiance = light.color;
-                                        const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
 
-                                        Lo = Lo.add(Lo1);
+                                        // const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
+
+                                        const front = Vec3.add(specular, l_diffuse).multv(radiance).multf(1.0 - transmission);
+                                        const back = Vec3.add(specular, l_transmitted).multv(radiance).multf(transmission);
+
+                                        Lo = Lo.add(front.add(back));
                                     } else {
                                         var light_dir: Vec3 = Vec3.init(0.0);
                                         var radiance: Vec3 = Vec3.init(0.0);
@@ -1282,9 +1318,45 @@ pub fn render_transcluent_meshes() !void {
                                         kD = kD.multf(1.0 - metallic);
 
                                         const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+
                                         const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
+
                                         const Lo2 = Vec3.add(Lo1, specular);
-                                        Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
+                                        // Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
+                                        const opaque_result = Vec3.multv(Lo2, radiance).multf(NdotL);
+
+                                        const one_minus_fresnel = Vec3.init(1.0).sub(fresnel);
+
+                                        const kT = one_minus_fresnel.multf(1.0 - metallic);
+
+                                        // const eta = 1.0 / ior;
+                                        // const r = Vec3.refract(view_dir.multf(-1.0), normal, eta);
+                                        // const thickness = 1.0;
+
+                                        // const new_r = Matrix4.multVec3(view_mat, r);
+
+                                        // var uv_offset = Vec2{ .x = r.x * thickness, .y = r.y * thickness };
+                                        // uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
+                                        // uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
+
+                                        // const sample_pos_x = std.math.clamp(x + @as(u32, @intFromFloat(uv_offset.x)), 0, opaque_fb.width);
+                                        // const sample_pos_y = std.math.clamp(y + @as(u32, @intFromFloat(uv_offset.y)), 0, opaque_fb.height);
+
+                                        // const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
+                                        // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
+                                        // const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
+                                        const transmitted = kT.multv(bg_color.multv(albedo)).multf(transmission);
+
+                                        const NdotL_Back: f32 = @max(Vec3.dot(normal, light_dir.multf(-1.0)), 0.0);
+
+                                        const transmissive_specular = specular.multv(radiance).multf(NdotL);
+                                        const transmissive_refraction = transmitted.multv(radiance).multf(NdotL_Back);
+
+                                        const transmissive_result = transmissive_specular.add(transmissive_refraction);
+                                        // const l_transmission = one_minus_fresnel.multv(bg_color.multv(albedo)).multf(transmission).multv(radiance).multf(NdotL_Back);
+
+                                        const mix = Vec3.mix(opaque_result, transmissive_result, transmission);
+                                        Lo = Lo.add(mix);
                                     }
                                 }
 
@@ -1294,18 +1366,25 @@ pub fn render_transcluent_meshes() !void {
                                 color = color.add(emissive);
                                 color = color.divv(color.add(Vec3.init(1.0)));
                                 const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
+                                if (transmission > 0.0) {
+                                    // const prev_color = transcluent_fb.getPixel(x, y);
+                                    // const blend_factor: f16 = 0.5;
+                                    // const blend = Color{
+                                    // .r = @as(f16, @floatCast(srgb.r)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
+                                    // .g = @as(f16, @floatCast(srgb.g)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
+                                    // .b = @as(f16, @floatCast(srgb.b)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
+                                    // };
 
-                                const prev_color = frame_buffer.getPixel(x, y);
-                                const blend_factor: f16 = @min(transmission, 0.9);
-                                // blend_factor = std.math.clamp(blend_factor, 0.0, 0.7);
-                                const blend = Color{
-                                    .r = @as(f16, @floatCast(srgb.r)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
-                                    .g = @as(f16, @floatCast(srgb.g)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
-                                    .b = @as(f16, @floatCast(srgb.b)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
-                                };
-
-                                frame_buffer.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b });
-                                // frame_buffer.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) });
+                                    // opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                    // transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                    // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(blend.r), .g = @floatCast(blend.g), .b = @floatCast(blend.b) }, 1.0);
+                                    transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    depth_buffer.putPixel(x, y, z);
+                                } else {
+                                    opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    depth_buffer.putPixel(x, y, z);
+                                }
+                                // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
                                 // depth_buffer.putPixel(x, y, @floatCast(z));
                             }
                         }
@@ -1348,7 +1427,8 @@ const TriSortContext = struct {
 
 // TODO: Merge Opaque and Transcluent same frag/vert code
 pub fn render(_: f32, camera: usize) !void {
-    frame_buffer.clearColor(0.2);
+    opaque_fb.clearColor(0.0);
+    transcluent_fb.clearColor(0.0);
     depth_buffer.clearColor(1.0);
 
     const cam = scene.cameras.items[camera % scene.cameras.items.len];
@@ -1358,11 +1438,18 @@ pub fn render(_: f32, camera: usize) !void {
     projection_mat = Matrix4.perspectiveProjection(cam.fov, aspect_ratio, 0.1, 100.0);
     const view_projection_mat = Matrix4.multMatrix4(projection_mat, view_mat);
 
+    // const bust = scene.translucent_meshes.items[0];
+    // const rot_mat = Matrix4.rotateY(theta);
+    // const model_mat = Matrix4.multMatrix4(rot_mat, bust.transform);
+    // scene.translucent_meshes.items[0].transform = model_mat;
+
     try render_opaque_meshes(view_projection_mat);
 
     try process_meshes(scene.translucent_meshes, view_projection_mat);
     std.mem.sort(Tri, tris.items, TriSortContext{ .camera_pos = camera_pos }, TriSortContext.compare);
-    try render_transcluent_meshes();
+    try render_transcluent_meshes(view_projection_mat);
+
+    opaque_fb.add(&transcluent_fb);
 }
 
 pub fn deinit() void {
@@ -1371,7 +1458,8 @@ pub fn deinit() void {
     // texture_pbr.deinit(allocator);
     tris.deinit(allocator);
     scene.deinit(allocator);
-    frame_buffer.deinit();
+    opaque_fb.deinit();
+    transcluent_fb.deinit();
     depth_buffer.deinit();
     arena.deinit();
 }

@@ -54,6 +54,7 @@ pub const RenderTargetRGBA16 = struct {
 
         if (_allocator.alloc(f16, _width * _height * 4)) |_buf| {
             _buffer = _buf;
+            @memset(_buf, 0.0);
         } else |err| {
             std.debug.print("error: {any}", .{err});
         }
@@ -78,11 +79,26 @@ pub const RenderTargetRGBA16 = struct {
         return color;
     }
 
-    pub fn putPixel(self: *RenderTargetRGBA16, x: u32, y: u32, color: Color) void {
+    pub fn putPixel(self: *RenderTargetRGBA16, x: u32, y: u32, color: Color, alpha: f16) void {
         self.buffer[y * 4 * self.width + (x * 4 + 0)] = color.r;
         self.buffer[y * 4 * self.width + (x * 4 + 1)] = color.g;
         self.buffer[y * 4 * self.width + (x * 4 + 2)] = color.b;
-        self.buffer[y * 4 * self.width + (x * 4 + 3)] = 1.0;
+        self.buffer[y * 4 * self.width + (x * 4 + 3)] = alpha;
+    }
+
+    pub fn add(self: *RenderTargetRGBA16, b: *RenderTargetRGBA16) void {
+        for (0..self.height) |y| {
+            for (0..self.width) |x| {
+                const b_col = b.getPixel(@intCast(x), @intCast(y));
+                if (b.buffer[y * 4 * self.width + (x * 4 + 3)] != 0.0) {
+                    self.putPixel(@intCast(x), @intCast(y), Color{
+                        .r = (b_col.r),
+                        .g = (b_col.g),
+                        .b = (b_col.b),
+                    }, 1.0);
+                }
+            }
+        }
     }
 
     pub fn clearColor(self: *RenderTargetRGBA16, value: f16) void {
