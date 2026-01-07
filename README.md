@@ -36,13 +36,11 @@ Screenshot:
 
 The Junk Shop:
 
-![screenshot](screenshot.png)
+![screenshot](screenshot1.png)
 
-<!--Lumberyard Bistro:-->
+![screenshot2](screenshot2.png)
 
-<!--![screenshot2](screenshot2.png)-->
-
-<!--![screenshot2](screenshot2.png)-->
+![screenshot2](screenshot3.png)
 
 ---
 
