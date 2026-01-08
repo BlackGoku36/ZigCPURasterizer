@@ -14,10 +14,11 @@ pub const Material = struct {
     pbr_texture: ?TexturePBR,
     pbr_solid: ?PBRSolid,
     type: MaterialType,
-    tex_coord: u8,
-    name: []const u8,
+    tex_coord: u8 = 0,
+    name: ?[]const u8,
 
     pub fn fromGltfTextureFiles(
+        material_name: ?[]const u8,
         diffuse_path: ?[]const u8,
         metalness_roughness_path: ?[]const u8,
         normal_path: ?[]const u8,
@@ -60,7 +61,7 @@ pub const Material = struct {
         return Material{
             .pbr_texture = mat,
             .pbr_solid = null,
-            .name = diffuse_path.?,
+            .name = material_name,
             .type = .Textured,
             .tex_coord = 0,
         };

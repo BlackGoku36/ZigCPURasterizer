@@ -303,6 +303,10 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
     std.debug.print("Has Transmission Texture: {}\n", .{transmission_texture_path != null});
 
     var pbr_material = PBRMaterial.fromGltfTextureFiles(
+        //TODO: Right now, name only lives as long as gltf lives.
+        // Handle names for textures and objects properly so they
+        // can be easily reference later
+        material.name,
         color_texture_path,
         metallic_rougness_texture_path,
         normal_texture_path,
@@ -320,10 +324,12 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         allocator,
     );
 
-    pbr_material.tex_coord = @intCast(material.metallic_roughness.base_color_texture.?.texcoord);
-    std.debug.print("TEXCOORD: {d}\n", .{pbr_material.tex_coord});
-
-    if (color_texture_path) |texture_path| allocator.free(texture_path);
+    if (color_texture_path) |texture_path| {
+        allocator.free(texture_path);
+        std.debug.print("TEXCOORD: {d}\n", .{pbr_material.tex_coord});
+        //TODO: Each texture has it own texcoord index, handle them all.
+        pbr_material.tex_coord = @intCast(material.metallic_roughness.base_color_texture.?.texcoord);
+    }
     if (metallic_rougness_texture_path) |texture_path| allocator.free(texture_path);
     if (normal_texture_path) |texture_path| allocator.free(texture_path);
     if (occlusion_texture_path) |texture_path| allocator.free(texture_path);
