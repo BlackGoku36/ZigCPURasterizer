@@ -584,15 +584,15 @@ var tris: std.ArrayList(Tri) = .{};
 
 pub fn init() !void {
     // meshes = try Meshes.fromGLTFFile("cannon_01_2k/cannon_01_2k.gltf", allocator);
-    // meshes = try Meshes.fromGLTFFile("main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
-    // meshes = try Meshes.fromGLTFFile("new_sponza/Untitled.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
-    // scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
+    scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/transparency_test/Untitled.gltf", allocator);
-    scene = try Scene.fromGLTFFile("assets/bust/Untitled.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/bust/Untitled.gltf", allocator);
     opaque_fb = RenderTargetRGBA16.create(allocator, width, height);
     transcluent_fb = RenderTargetRGBA16.create(allocator, width, height);
     depth_buffer = RenderTargetR16.create(allocator, width, height);
@@ -1219,22 +1219,29 @@ pub fn render_transcluent_meshes(view_projection_mat: Matrix4) !void {
 
                                 const eta = 1.0 / ior;
                                 //TODO: Improve this refraction code?
-                                const r = Vec3.refract(view_dir.multf(-1.0), normal, eta);
-                                // const thickness = 1.5;
+                                const r = Vec3.normalize(Vec3.refract(view_dir.multf(-1.0), normal, eta));
+                                // const thickness = 0.5;
                                 const thickness = @abs(depth_buffer.getPixel(x, y) - z) * 500.0;
-
                                 const new_r = Matrix4.multVec3(view_projection_mat, r);
 
                                 var uv_offset = Vec2{ .x = new_r.x * thickness, .y = new_r.y * thickness };
-                                // var uv_offset = Vec2{ .x = 0.0, .y = 0.0 };
+
+                                // We clamp because int part of float overflows.
+                                // We make sure the offset doesn't go outside opaque fb's bounds
+                                uv_offset.x = std.math.clamp(uv_offset.x, 0.0, 1.0);
+                                uv_offset.y = std.math.clamp(uv_offset.y, 0.0, 1.0);
 
                                 uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
                                 uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
 
-                                const sample_pos_x = std.math.clamp(x + @as(u32, @intFromFloat(uv_offset.x)), 0, opaque_fb.width);
-                                const sample_pos_y = std.math.clamp(y + @as(u32, @intFromFloat(uv_offset.y)), 0, opaque_fb.height);
+                                const uv_offset_i_x = @as(u32, @intFromFloat(uv_offset.x));
+                                const uv_offset_i_y = @as(u32, @intFromFloat(uv_offset.y));
+
+                                const sample_pos_x = std.math.clamp(x + uv_offset_i_x, 0, opaque_fb.width - 1);
+                                const sample_pos_y = std.math.clamp(y + uv_offset_i_y, 0, opaque_fb.height - 1);
 
                                 const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
+
                                 const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
                                 const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
 
