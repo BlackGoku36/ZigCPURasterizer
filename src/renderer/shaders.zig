@@ -3,7 +3,7 @@ const Vec4 = @import("../math/vec4.zig").Vec4;
 const Vec3 = @import("../math/vec3.zig").Vec3;
 const Vec2 = @import("../math/vec2.zig").Vec2;
 const Matrix4 = @import("../math/matrix4.zig").Matrix4;
-const TexturePBR = @import("../utils/texture.zig").TexturePBR;
+const PBRTexture = @import("../utils/texture.zig").PBRTexture;
 const PBR = @import("../utils/texture.zig").PBR;
 
 // LTC's LUT
@@ -188,7 +188,7 @@ pub fn bilinearClampSample(tex: [64 * 64]Vec4, uv_: Vec2) Vec4 {
 }
 
 // TODO: look into texture sampling
-pub fn pbrBilinearSample(texture: TexturePBR, uv_: Vec2) PBR {
+pub fn pbrBilinearSample(texture: PBRTexture, uv_: Vec2) PBR {
     const uv = uv_.clamp(Vec2.init(0.0), Vec2.init(1.0));
 
     const tex_size = Vec2{ .x = @floatFromInt(texture.width), .y = @floatFromInt(texture.height) };

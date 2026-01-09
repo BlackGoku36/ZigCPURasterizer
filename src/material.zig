@@ -1,5 +1,5 @@
 const std = @import("std");
-const TexturePBR = @import("utils/texture.zig").TexturePBR;
+const PBRTexture = @import("utils/texture.zig").PBRTexture;
 const RGB = @import("utils/texture.zig").RGB;
 const PBRSolid = @import("utils/texture.zig").PBRSolid;
 const PBRTextureDescriptor = @import("utils/texture.zig").PBRTextureDescriptor;
@@ -9,9 +9,8 @@ const Vec2 = @import("math/vec2.zig").Vec2;
 
 pub const MaterialType = enum { Textured, Solid };
 
-// TODO: Decide whether to use PBR as suffix or prefix
 pub const Material = struct {
-    pbr_texture: ?TexturePBR,
+    pbr_texture: ?PBRTexture,
     pbr_solid: ?PBRSolid,
     type: MaterialType,
     tex_coord: u8 = 0,
@@ -35,8 +34,8 @@ pub const Material = struct {
         ior: f32,
         allocator: std.mem.Allocator,
     ) Material {
-        var mat: TexturePBR = undefined;
-        if (TexturePBR.loadTextureFromDescriptor(PBRTextureDescriptor{
+        var mat: PBRTexture = undefined;
+        if (PBRTexture.loadTextureFromDescriptor(PBRTextureDescriptor{
             .albedo_tex_path = diffuse_path,
             .normal_tex_path = normal_path,
             .rm_tex_path = metalness_roughness_path,

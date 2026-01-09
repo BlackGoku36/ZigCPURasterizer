@@ -87,7 +87,7 @@ pub const PBRTextureDescriptor = struct {
     ior: f32,
 };
 
-pub const TexturePBR = struct {
+pub const PBRTexture = struct {
     width: usize,
     height: usize,
     normal: bool = false,
@@ -112,7 +112,7 @@ pub const TexturePBR = struct {
         return file;
     }
 
-    pub fn loadTextureFromDescriptor(desc: PBRTextureDescriptor, allocator: std.mem.Allocator) !TexturePBR {
+    pub fn loadTextureFromDescriptor(desc: PBRTextureDescriptor, allocator: std.mem.Allocator) !PBRTexture {
         var normals: bool = false;
 
         var texture_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
@@ -332,7 +332,7 @@ pub const TexturePBR = struct {
             }
         }
 
-        return TexturePBR{
+        return PBRTexture{
             .width = alloc_width,
             .height = alloc_height,
             .buffer = _buffer,
@@ -691,7 +691,7 @@ pub const TexturePBR = struct {
     //     };
     // }
 
-    pub fn deinit(texture: TexturePBR, allocator: std.mem.Allocator) void {
+    pub fn deinit(texture: PBRTexture, allocator: std.mem.Allocator) void {
         allocator.free(texture.buffer);
     }
 };
