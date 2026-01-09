@@ -9,6 +9,7 @@ const sgapp = sokol.app_gfx_glue;
 
 const shd = @import("shader");
 const rasterizer = @import("renderer/rasterizer.zig");
+const zigimg = @import("zigimg");
 
 const state = struct {
     var bind: sg.Bindings = .{};
@@ -23,7 +24,7 @@ const state = struct {
 };
 
 export fn init() void {
-    rasterizer.init() catch |err| {
+    rasterizer.init("assets/damaged_helmet/Untitled.gltf") catch |err| {
         std.debug.print("error: {any}", .{err});
     };
 
@@ -195,19 +196,57 @@ export fn cleanup() void {
     sg.shutdown();
 }
 
-pub fn main() void {
-    sapp.run(
-        .{
-            .init_cb = init,
-            .frame_cb = frame,
-            .cleanup_cb = cleanup,
-            .width = rasterizer.width,
-            .height = rasterizer.height,
-            .icon = .{
-                .sokol_default = true,
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len > 1) {
+        const gltf_file_path = args[1];
+
+        if (std.mem.eql(u8, std.fs.path.extension(gltf_file_path), ".gltf")) {
+            rasterizer.init(gltf_file_path) catch |err| {
+                std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
+            };
+            defer rasterizer.deinit();
+
+            try rasterizer.render(0.0, 0);
+
+            const width = 1500;
+            const height = 750;
+            var image = try zigimg.Image.create(allocator, width, height, .rgb24);
+            defer image.deinit(allocator);
+
+            for (0..height) |y| {
+                for (0..width) |x| {
+                    const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
+                    const col_u8 = zigimg.color.Rgb24.from.color(col);
+                    image.pixels.rgb24[y * width + x] = col_u8;
+                }
+            }
+
+            var image_write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+            try image.writeToFilePath(allocator, "out.png", &image_write_buffer, .{ .png = .{} });
+        } else {
+            std.debug.print("Error: Expected path containing a glTF file, found {s}\n", .{gltf_file_path});
+        }
+    } else {
+        sapp.run(
+            .{
+                .init_cb = init,
+                .frame_cb = frame,
+                .cleanup_cb = cleanup,
+                .width = rasterizer.width,
+                .height = rasterizer.height,
+                .icon = .{
+                    .sokol_default = true,
+                },
+                .window_title = "ZigSoftwareRasterizerCPU",
+                .event_cb = input,
             },
-            .window_title = "ZigSoftwareRasterizerCPU",
-            .event_cb = input,
-        },
-    );
+        );
+    }
 }

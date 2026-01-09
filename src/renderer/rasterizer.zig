@@ -113,9 +113,10 @@ var view_mat: Matrix4 = undefined;
 
 var tris: std.ArrayList(Tri) = .{};
 
-pub fn init() !void {
+pub fn init(gltf_file_path: []const u8) !void {
+    scene = try Scene.fromGLTFFile(gltf_file_path, allocator);
     // scene = try Scene.fromGLTFFile("assets/cannon_01_2k/cannon_01_2k.gltf", allocator);
-    scene = try Scene.fromGLTFFile("assets/damaged_helmet/Untitled.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/damaged_helmet/Untitled.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
