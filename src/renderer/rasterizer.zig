@@ -38,11 +38,6 @@ const ltc = @import("ltc_lut.zig");
 const LTC1 = ltc.LTC1Vec;
 const LTC2 = ltc.LTC2Vec;
 
-// pub const width = 1280;
-// pub const height = 720;
-pub const width = 1500;
-pub const height = 750;
-
 const WindingOrder = enum { CW, CCW };
 
 const AABB = struct {
@@ -62,13 +57,13 @@ const AABB = struct {
         // max_x = @min(max_x, width);
         // max_y = @min(max_y, height);
 
-        if (min_x > width - 1 or max_x < 0 or min_y > height - 1 or max_y < 0) {
+        if (min_x > width_f32 - 1 or max_x < 0 or min_y > height_f32 - 1 or max_y < 0) {
             return null;
         } else {
             min_x = @max(0.0, min_x);
-            max_x = @min(width - 1, max_x);
+            max_x = @min(width_f32 - 1, max_x);
             min_y = @max(0.0, min_y);
-            max_y = @min(height - 1, max_y);
+            max_y = @min(height_f32 - 1, max_y);
 
             return AABB{ .min_x = @intFromFloat(min_x), .min_y = @intFromFloat(min_y), .max_x = @intFromFloat(max_x), .max_y = @intFromFloat(max_y) };
         }
@@ -100,10 +95,6 @@ pub var depth_buffer: RenderTargetR16 = undefined;
 
 var scene: Scene = undefined;
 
-var tex_width_f32: f32 = 0.0;
-var tex_height_f32: f32 = 0.0;
-const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(height));
-
 const winding_order = WindingOrder.CCW;
 
 var camera_pos = Vec3{ .x = -3.0, .y = 1.0, .z = 0.0 };
@@ -113,8 +104,19 @@ var view_mat: Matrix4 = undefined;
 
 var tris: std.ArrayList(Tri) = .{};
 
+pub var width: u32 = 0;
+pub var height: u32 = 0;
+var width_f32: f32 = 0;
+var height_f32: f32 = 0;
+
 pub fn init(gltf_file_path: []const u8) !void {
     scene = try Scene.fromGLTFFile(gltf_file_path, allocator);
+
+    width_f32 = std.math.pow(f32, 2.0, 10.0);
+    height_f32 = width_f32 * (1.0 / scene.cameras.items[0].aspect_ratio);
+
+    width = @intFromFloat(@round(width_f32));
+    height = @intFromFloat(@round(height_f32));
     // scene = try Scene.fromGLTFFile("assets/cannon_01_2k/cannon_01_2k.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/damaged_helmet/Untitled.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
@@ -133,9 +135,9 @@ pub fn init(gltf_file_path: []const u8) !void {
     camera_pos = c.pos;
     view_mat = c.view_matrix;
     if (c.type == .Perspective) {
-        projection_mat = Matrix4.perspectiveProjection(c.fov, aspect_ratio, 0.1, 100.0);
+        projection_mat = Matrix4.perspectiveProjection(c.fov, c.aspect_ratio, 0.1, 100.0);
     } else {
-        const adjusted_xmag = c.ymag * aspect_ratio;
+        const adjusted_xmag = c.ymag * c.aspect_ratio;
         projection_mat = Matrix4.orthogonalProjection(-adjusted_xmag, adjusted_xmag, c.ymag, -c.ymag, 0.1, 1000.0);
     }
 }
@@ -384,9 +386,9 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
 
                     const new_tri = Tri.clipToNDC(triangle);
 
-                    const a = Vec4.ndcToRaster(new_tri.v0.position, width, height);
-                    const b = Vec4.ndcToRaster(new_tri.v1.position, width, height);
-                    const c = Vec4.ndcToRaster(new_tri.v2.position, width, height);
+                    const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
+                    const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
+                    const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
 
                     if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
                         const area = edgeFunction(a, b, c.x, c.y);
@@ -624,9 +626,9 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
 
             const new_tri = Tri.clipToNDC(triangle);
 
-            const a = Vec4.ndcToRaster(new_tri.v0.position, width, height);
-            const b = Vec4.ndcToRaster(new_tri.v1.position, width, height);
-            const c = Vec4.ndcToRaster(new_tri.v2.position, width, height);
+            const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
+            const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
+            const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
 
             if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
                 const area = edgeFunction(a, b, c.x, c.y);
@@ -977,7 +979,7 @@ pub fn render(_: f32, camera: usize) !void {
 
     camera_pos = cam.pos;
     view_mat = cam.view_matrix;
-    projection_mat = Matrix4.perspectiveProjection(cam.fov, aspect_ratio, 0.1, 100.0);
+    projection_mat = Matrix4.perspectiveProjection(cam.fov, cam.aspect_ratio, 0.1, 100.0);
     const view_projection_mat = Matrix4.multMatrix4(projection_mat, view_mat);
 
     // const bust = scene.translucent_meshes.items[0];

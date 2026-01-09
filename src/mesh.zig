@@ -49,6 +49,7 @@ pub const Camera = struct {
     type: CameraType,
     xmag: f32 = 0.0,
     ymag: f32 = 0.0,
+    aspect_ratio: f32 = 16.0 / 9.0,
 };
 
 pub fn getMatrixFromNode(node: Gltf.Node, parent_matrix: Matrix4) Matrix4 {
@@ -513,15 +514,20 @@ pub const Scene = struct {
                         var fov: f32 = 0.0;
                         var xmag: f32 = 0.0;
                         var ymag: f32 = 0.0;
+                        var aspect_ratio: f32 = 16.0 / 9.0;
                         var camera_type: CameraType = undefined;
 
                         switch (camera.type) {
                             .perspective => |p| {
                                 fov = p.yfov;
+                                if (p.aspect_ratio) |a_r| {
+                                    aspect_ratio = a_r;
+                                }
                                 camera_type = .Perspective;
                             },
                             .orthographic => |o| {
                                 camera_type = .Orthogonal;
+
                                 xmag = o.xmag;
                                 ymag = o.ymag;
                             },
@@ -555,6 +561,7 @@ pub const Scene = struct {
                                 .xmag = xmag,
                                 .ymag = ymag,
                                 .type = camera_type,
+                                .aspect_ratio = aspect_ratio,
                             });
                         }
                     }

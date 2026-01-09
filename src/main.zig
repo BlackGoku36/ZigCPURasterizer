@@ -36,15 +36,15 @@ export fn init() void {
     const quad_vbuf = sg.makeBuffer(.{ .data = sg.asRange(&[_]f32{ 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0 }) });
 
     const fb_img_desc: sg.ImageDesc = .{
-        .width = rasterizer.width,
-        .height = rasterizer.height,
+        .width = @intCast(rasterizer.width),
+        .height = @intCast(rasterizer.height),
         .pixel_format = sg.PixelFormat.RGBA16F,
         .usage = .{ .stream_update = true },
     };
 
     const db_img_desc: sg.ImageDesc = .{
-        .width = rasterizer.width,
-        .height = rasterizer.height,
+        .width = @intCast(rasterizer.width),
+        .height = @intCast(rasterizer.height),
         .pixel_format = sg.PixelFormat.R32F,
         .usage = .{ .stream_update = true },
     };
@@ -215,8 +215,8 @@ pub fn main() !void {
 
             try rasterizer.render(0.0, 0);
 
-            const width = 1500;
-            const height = 750;
+            const width = rasterizer.width;
+            const height = rasterizer.height;
             var image = try zigimg.Image.create(allocator, width, height, .rgb24);
             defer image.deinit(allocator);
 
@@ -239,8 +239,9 @@ pub fn main() !void {
                 .init_cb = init,
                 .frame_cb = frame,
                 .cleanup_cb = cleanup,
-                .width = rasterizer.width,
-                .height = rasterizer.height,
+                //TODO: Fix width and height here
+                .width = @intCast(rasterizer.width),
+                .height = @intCast(rasterizer.height),
                 .icon = .{
                     .sokol_default = true,
                 },
