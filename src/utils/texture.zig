@@ -73,7 +73,7 @@ pub const PBRTextureDescriptor = struct {
     albedo_tex_path: ?[]const u8,
     normal_tex_path: ?[]const u8,
     rm_tex_path: ?[]const u8,
-    // occlusion_tex_path: ?[]const u8,
+    occlusion_tex_path: ?[]const u8,
     emissive_tex_path: ?[]const u8,
     transmission_tex_path: ?[]const u8,
     emissive_strength: f32,
@@ -81,6 +81,7 @@ pub const PBRTextureDescriptor = struct {
     normal_scale: f32,
     metallic_factor: f32,
     roughness_factor: f32,
+    occlusion_strength: f32,
     emissive_factor: [3]f32,
     alpha_cutoff: f32,
     transmission_factor: f32,
@@ -114,12 +115,15 @@ pub const PBRTexture = struct {
 
     pub fn loadTextureFromDescriptor(desc: PBRTextureDescriptor, allocator: std.mem.Allocator) !PBRTexture {
         var normals: bool = false;
+        var occlusion: bool = false;
+        var occlusion_seperate: bool = false;
 
         var texture_read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
 
         var albedo_file: ?std.fs.File = null;
         var normal_file: ?std.fs.File = null;
         var rm_file: ?std.fs.File = null;
+        var occlusion_file: ?std.fs.File = null;
         var emissive_file: ?std.fs.File = null;
         var transmission_file: ?std.fs.File = null;
 
@@ -136,6 +140,14 @@ pub const PBRTexture = struct {
             std.debug.print("RM file path: {s}\n", .{rm_tex_path});
             rm_file = getFileFromPath(rm_tex_path);
         }
+        if (desc.occlusion_tex_path) |occlusion_tex_path| {
+            occlusion = true;
+            if (!std.mem.eql(u8, occlusion_tex_path, desc.rm_tex_path orelse "fake_path")) {
+                occlusion_seperate = true;
+            }
+            std.debug.print("Occlusion file path (seperate: {}): {s}\n", .{ occlusion_seperate, occlusion_tex_path });
+            occlusion_file = getFileFromPath(occlusion_tex_path);
+        }
         if (desc.emissive_tex_path) |emissive_tex_path| {
             std.debug.print("Emissive file path: {s}\n", .{emissive_tex_path});
             emissive_file = getFileFromPath(emissive_tex_path);
@@ -148,6 +160,7 @@ pub const PBRTexture = struct {
         var albedo_tex: ?zigimg.Image = null;
         var normal_tex: ?zigimg.Image = null;
         var rm_tex: ?zigimg.Image = null;
+        var occlusion_tex: ?zigimg.Image = null;
         var emissive_tex: ?zigimg.Image = null;
         var transmission_tex: ?zigimg.Image = null;
 
@@ -157,6 +170,8 @@ pub const PBRTexture = struct {
         var normal_height: usize = 0;
         var rm_width: usize = 0;
         var rm_height: usize = 0;
+        var occlusion_width: usize = 0;
+        var occlusion_height: usize = 0;
         var emissive_width: usize = 0;
         var emissive_height: usize = 0;
         var transmission_width: usize = 0;
@@ -183,6 +198,8 @@ pub const PBRTexture = struct {
 
             rm_width = tex.width;
             rm_height = tex.height;
+            occlusion_width = tex.width;
+            occlusion_height = tex.height;
             try tex.convert(allocator, zigimg.PixelFormat.rgb24);
             rm_tex = tex;
         }
@@ -202,12 +219,22 @@ pub const PBRTexture = struct {
             try tex.convert(allocator, zigimg.PixelFormat.grayscale16);
             transmission_tex = tex;
         }
+        if (occlusion and occlusion_seperate) {
+            if (occlusion_file) |file| {
+                var tex = try zigimg.Image.fromFile(allocator, file, texture_read_buffer[0..]);
+
+                occlusion_width = tex.width;
+                occlusion_height = tex.height;
+                try tex.convert(allocator, zigimg.PixelFormat.grayscale16);
+                occlusion_tex = tex;
+            }
+        }
 
         var alloc_width: usize = 0;
         var alloc_height: usize = 0;
 
-        alloc_width = @max(albedo_width, normal_width, rm_width, emissive_width, transmission_width);
-        alloc_height = @max(albedo_height, normal_height, rm_height, emissive_height, transmission_height);
+        alloc_width = @max(albedo_width, normal_width, rm_width, emissive_width, transmission_width, occlusion_width);
+        alloc_height = @max(albedo_height, normal_height, rm_height, emissive_height, transmission_height, occlusion_height);
 
         var _buffer: []PBR = undefined;
 
@@ -296,6 +323,10 @@ pub const PBRTexture = struct {
                     const out_index = y * rm_width + x;
                     _buffer[out_index].metallic = @floatCast(metal_value);
                     _buffer[out_index].roughness = @floatCast(roughness_value);
+
+                    if (occlusion and !occlusion_seperate) {
+                        _buffer[out_index].ao = @floatCast(rm[0] * desc.occlusion_strength);
+                    }
                 }
             }
         }
@@ -328,6 +359,19 @@ pub const PBRTexture = struct {
                     // We flip the opacity because that what "The Junk Shop" does.
                     // TODO: Check with other scene
                     _buffer[out_index].transmission = @floatCast(1.0 - opacity);
+                }
+            }
+        }
+        if (occlusion and occlusion_seperate) {
+            if (occlusion_tex) |img| {
+                for (0..occlusion_width) |x| {
+                    for (0..occlusion_height) |y| {
+                        const sample_index = @mod(y, occlusion_height) * occlusion_width + @mod(x, occlusion_width);
+                        const occlusion_value = img.pixels.grayscale16[sample_index].toColorf32().r;
+
+                        const out_index = y * occlusion_width + x;
+                        _buffer[out_index].ao = @floatCast(occlusion_value * desc.occlusion_strength);
+                    }
                 }
             }
         }

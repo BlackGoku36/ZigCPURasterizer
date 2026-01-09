@@ -114,12 +114,13 @@ var view_mat: Matrix4 = undefined;
 var tris: std.ArrayList(Tri) = .{};
 
 pub fn init() !void {
-    // meshes = try Meshes.fromGLTFFile("cannon_01_2k/cannon_01_2k.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/cannon_01_2k/cannon_01_2k.gltf", allocator);
+    scene = try Scene.fromGLTFFile("assets/damaged_helmet/Untitled.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/main_sponza/NewSponza_Main_glTF_003.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/new_sponza/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/slum/Untitled.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/arealight_test/Untitled.gltf", allocator);
-    scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
+    // scene = try Scene.fromGLTFFile("assets/junkshop_temp/thejunkshopsplashscreen-2.gltf", allocator);
     // meshes = try Meshes.fromGLTFFile("assets/pokedstudio/pokedstudio.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/bistro/Untitled.gltf", allocator);
     // scene = try Scene.fromGLTFFile("assets/transparency_test/Untitled.gltf", allocator);
@@ -433,7 +434,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                                         var normal: Vec3 = Vec3.init(0.0);
                                         var metallic: f32 = 0.0;
                                         var roughness: f32 = 0.0;
-                                        // var ao: f32 = 0.0;
+                                        var ao: f32 = 0.0;
 
                                         var emissive: Vec3 = Vec3.init(0.0);
 
@@ -471,7 +472,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
 
                                             metallic = @floatCast(pbr.metallic);
                                             roughness = @floatCast(pbr.roughness);
-                                            // ao = @floatCast(pbr.ao);
+                                            ao = @floatCast(pbr.ao);
                                             emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
 
                                             normal = frag_normal;
@@ -485,10 +486,12 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                                             normal = frag_normal;
                                             metallic = @floatCast(pbr_solid.metallic);
                                             roughness = @floatCast(pbr_solid.roughness);
-                                            // ao = @floatCast(pbr_solid.ao);
+                                            ao = @floatCast(pbr_solid.ao);
 
                                             emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
                                         }
+
+                                        albedo = albedo.multf(ao);
 
                                         const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
                                         const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;

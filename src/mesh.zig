@@ -270,13 +270,14 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         normal_strength = normal_texture.scale;
     }
 
-    //TODO: Unused
+    var occlusion_strength: f32 = 1.0;
     if (material.occlusion_texture) |occlusion_texture| {
         const texture_idx = occlusion_texture.index;
         const occlusion_texture_source_idx = gltf.data.textures[texture_idx].source.?;
         const occlusion_texture_uri = gltf.data.images[occlusion_texture_source_idx].uri.?;
         occlusion_texture_path = try std.fs.path.join(allocator, &[_][]const u8{ parent_path, occlusion_texture_uri });
         occlusion_texture_path = std.Uri.percentDecodeInPlace(occlusion_texture_path.?);
+        occlusion_strength = occlusion_texture.strength;
     }
 
     if (material.emissive_texture) |emissive_texture| {
@@ -309,6 +310,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         material.name,
         color_texture_path,
         metallic_rougness_texture_path,
+        occlusion_texture_path,
         normal_texture_path,
         emissive_texture_path,
         transmission_texture_path,
@@ -317,6 +319,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         normal_strength,
         material.metallic_roughness.metallic_factor,
         material.metallic_roughness.roughness_factor,
+        occlusion_strength,
         material.emissive_factor,
         material.alpha_cutoff,
         material.transmission_factor,
@@ -572,9 +575,9 @@ pub const Scene = struct {
         if (lights.items.len == 0) {
             try lights.append(allocator, Light{
                 .color = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 },
-                .pos = Vec3.init(0.0),
+                .pos = Vec3{ .x = 1.0, .y = 3.0, .z = 1.0 },
                 // .pos = Vec3.normalize(Vec3.sub(Vec3.init(1.0), Vec3.init(0.0))),
-                .intensity = 1.0, //light.intensity,
+                .intensity = 50.0, //light.intensity,
                 .range = 10.0, //light.range,
                 // .type = .Directional,
                 .type = .Point,
