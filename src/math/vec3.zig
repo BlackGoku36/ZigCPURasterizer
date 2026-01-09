@@ -131,4 +131,12 @@ pub const Vec3 = struct {
         out_vec.z = 1.0 / a.z;
         return out_vec;
     }
+
+    pub fn lerp(a: Vec3, b: Vec3, t: f32) Vec3 {
+        return Vec3{
+            .x = std.math.lerp(a.x, b.x, t),
+            .y = std.math.lerp(a.y, b.y, t),
+            .z = std.math.lerp(a.z, b.z, t),
+        };
+    }
 };

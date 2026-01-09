@@ -1,3 +1,4 @@
+const std = @import("std");
 const Vec3 = @import("vec3.zig").Vec3;
 
 pub const Vec4 = struct {
@@ -79,5 +80,14 @@ pub const Vec4 = struct {
         out_vec.y = (1.0 - a.y) * 0.5 * height;
         out_vec.z = 1.0 / a.z;
         return out_vec;
+    }
+
+    pub fn lerp(a: Vec4, b: Vec4, t: f32) Vec4 {
+        return Vec4{
+            .x = std.math.lerp(a.x, b.x, t),
+            .y = std.math.lerp(a.y, b.y, t),
+            .z = std.math.lerp(a.z, b.z, t),
+            .w = std.math.lerp(a.w, b.w, t),
+        };
     }
 };

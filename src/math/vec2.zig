@@ -70,4 +70,11 @@ pub const Vec2 = struct {
             .y = @floatFromInt(y),
         };
     }
+
+    pub fn lerp(a: Vec2, b: Vec2, t: f32) Vec2 {
+        return Vec2{
+            .x = std.math.lerp(a.x, b.x, t),
+            .y = std.math.lerp(a.y, b.y, t),
+        };
+    }
 };
