@@ -7,11 +7,11 @@ pub const RGB = struct {
     y: f16,
     z: f16,
 
-    pub fn mix(start: RGB, end: RGB, t: f16) RGB {
+    pub fn lerp(start: RGB, end: RGB, t: f16) RGB {
         return RGB{
-            .x = start.x * (1 - t) + end.x * t,
-            .y = start.y * (1 - t) + end.y * t,
-            .z = start.z * (1 - t) + end.z * t,
+            .x = std.math.lerp(start.x, end.x, t),
+            .y = std.math.lerp(start.y, end.y, t),
+            .z = std.math.lerp(start.z, end.z, t),
         };
     }
 };
@@ -22,12 +22,12 @@ pub const RGBA = struct {
     z: f16,
     w: f16,
 
-    pub fn mix(start: RGBA, end: RGBA, t: f16) RGBA {
+    pub fn lerp(start: RGBA, end: RGBA, t: f16) RGBA {
         return RGBA{
-            .x = start.x * (1 - t) + end.x * t,
-            .y = start.y * (1 - t) + end.y * t,
-            .z = start.z * (1 - t) + end.z * t,
-            .w = start.w * (1 - t) + end.w * t,
+            .x = std.math.lerp(start.x, end.x, t),
+            .y = std.math.lerp(start.y, end.y, t),
+            .z = std.math.lerp(start.z, end.z, t),
+            .w = std.math.lerp(start.w, end.w, t),
         };
     }
 };
@@ -42,17 +42,17 @@ pub const PBR = struct {
     transmission: f16,
     ior: f16,
 
-    pub fn mix(start: PBR, end: PBR, t: f16) PBR {
+    pub fn lerp(start: PBR, end: PBR, t: f16) PBR {
         return PBR{
             // TODO: This way of mixing color good enough?
-            .albedo = RGBA.mix(start.albedo, end.albedo, t),
-            .normal = RGB.mix(start.normal, end.normal, t),
-            .emissive = RGB.mix(start.emissive, end.emissive, t),
-            .metallic = start.metallic * (1 - t) + end.metallic * t,
-            .roughness = start.roughness * (1 - t) + end.roughness * t,
-            .ao = start.ao * (1 - t) + end.ao * t,
-            .transmission = start.transmission * (1 - t) + end.transmission * t,
-            .ior = start.ior * (1 - t) + end.ior * t,
+            .albedo = RGBA.lerp(start.albedo, end.albedo, t),
+            .normal = RGB.lerp(start.normal, end.normal, t),
+            .emissive = RGB.lerp(start.emissive, end.emissive, t),
+            .metallic = std.math.lerp(start.metallic, end.metallic, t),
+            .roughness = std.math.lerp(start.roughness, end.roughness, t),
+            .ao = std.math.lerp(start.ao, end.ao, t),
+            .transmission = std.math.lerp(start.transmission, end.transmission, t),
+            .ior = std.math.lerp(start.ior, end.ior, t),
         };
     }
 };

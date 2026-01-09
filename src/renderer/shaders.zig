@@ -181,10 +181,10 @@ pub fn bilinearClampSample(tex: [64 * 64]Vec4, uv_: Vec2) Vec4 {
     const c01 = tex[@intCast(idx1_y * 64 + idx0_x)];
     const c11 = tex[@intCast(idx1_y * 64 + idx1_x)];
 
-    const c0 = Vec4.mix(c00, c10, frac.x);
-    const c1 = Vec4.mix(c01, c11, frac.x);
+    const c0 = Vec4.lerp(c00, c10, frac.x);
+    const c1 = Vec4.lerp(c01, c11, frac.x);
 
-    return Vec4.mix(c0, c1, frac.y);
+    return Vec4.lerp(c0, c1, frac.y);
 }
 
 // TODO: look into texture sampling
@@ -209,10 +209,10 @@ pub fn pbrBilinearSample(texture: TexturePBR, uv_: Vec2) PBR {
     const c01 = texture.buffer[@as(usize, @intCast(idx1_y)) * texture.width + @as(usize, @intCast(idx0_x))];
     const c11 = texture.buffer[@as(usize, @intCast(idx1_y)) * texture.width + @as(usize, @intCast(idx1_x))];
 
-    const c0 = PBR.mix(c00, c10, @floatCast(frac.x));
-    const c1 = PBR.mix(c01, c11, @floatCast(frac.x));
+    const c0 = PBR.lerp(c00, c10, @floatCast(frac.x));
+    const c1 = PBR.lerp(c01, c11, @floatCast(frac.x));
 
-    return PBR.mix(c0, c1, @floatCast(frac.y));
+    return PBR.lerp(c0, c1, @floatCast(frac.y));
 }
 
 // https://github.com/b1skit/LTCAreaLightsGigi/blob/main/LTCAreaLightCS.hlsl

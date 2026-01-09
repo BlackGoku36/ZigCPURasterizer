@@ -61,15 +61,6 @@ pub const Vec3 = struct {
         };
     }
 
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/mix.xhtml
-    pub fn mix(start: Vec3, end: Vec3, t: f32) Vec3 {
-        return Vec3{
-            .x = start.x * (1 - t) + end.x * t,
-            .y = start.y * (1 - t) + end.y * t,
-            .z = start.z * (1 - t) + end.z * t,
-        };
-    }
-
     pub fn max(a: Vec3, b: Vec3) Vec3 {
         return Vec3{
             .x = @max(a.x, b.x),

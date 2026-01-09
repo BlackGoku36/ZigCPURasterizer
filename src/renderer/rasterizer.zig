@@ -500,7 +500,7 @@ pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
                                         var Lo: Vec3 = Vec3.init(0.0);
 
                                         var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
-                                        f0 = Vec3.mix(f0, albedo, metallic);
+                                        f0 = Vec3.lerp(f0, albedo, metallic);
 
                                         for (scene.lights.items) |light| {
                                             if (light.type == .Area) {
@@ -746,7 +746,7 @@ pub fn render_transcluent_meshes(view_projection_mat: Matrix4) !void {
 
                                 // var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
                                 var f0 = Vec3.init(std.math.pow(f32, (ior - 1.0) / (ior + 1.0), 2.0));
-                                f0 = Vec3.mix(f0, albedo, metallic);
+                                f0 = Vec3.lerp(f0, albedo, metallic);
 
                                 const eta = 1.0 / ior;
                                 //TODO: Improve this refraction code?
@@ -893,7 +893,7 @@ pub fn render_transcluent_meshes(view_projection_mat: Matrix4) !void {
                                         const transmissive_result = transmissive_specular.add(transmissive_refraction);
                                         // const l_transmission = one_minus_fresnel.multv(bg_color.multv(albedo)).multf(transmission).multv(radiance).multf(NdotL_Back);
 
-                                        const mix = Vec3.mix(opaque_result, transmissive_result, transmission);
+                                        const mix = Vec3.lerp(opaque_result, transmissive_result, transmission);
                                         Lo = Lo.add(mix);
                                     }
                                 }

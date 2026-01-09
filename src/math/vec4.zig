@@ -56,15 +56,6 @@ pub const Vec4 = struct {
         return a.x * b.x + a.y * b.y + a.z * b.z;
     }
 
-    pub fn mix(start: Vec4, end: Vec4, t: f32) Vec4 {
-        return Vec4{
-            .x = start.x * (1 - t) + end.x * t,
-            .y = start.y * (1 - t) + end.y * t,
-            .z = start.z * (1 - t) + end.z * t,
-            .w = start.w * (1 - t) + end.w * t,
-        };
-    }
-
     pub fn toVec3(self: Vec4) Vec3 {
         return Vec3{ .x = self.x, .y = self.y, .z = self.z };
     }
