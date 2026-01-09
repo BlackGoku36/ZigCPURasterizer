@@ -138,7 +138,7 @@ pub fn init() !void {
     }
 }
 
-pub fn process_meshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
+pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
     tris.clearRetainingCapacity();
 
     for (meshes.items) |mesh| {
@@ -256,7 +256,7 @@ pub fn process_meshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
     }
 }
 
-pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
+pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
     for (scene.opaque_meshes.items) |mesh| {
         if (!mesh.should_render) continue;
 
@@ -608,7 +608,7 @@ pub fn render_opaque_meshes(view_projection_mat: Matrix4) !void {
     }
 }
 
-pub fn render_transcluent_meshes(view_projection_mat: Matrix4) !void {
+pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
     for (tris.items) |tri| {
         const active_material = scene.materials.items[tri.material_idx];
 
@@ -981,11 +981,11 @@ pub fn render(_: f32, camera: usize) !void {
     // const model_mat = Matrix4.multMatrix4(rot_mat, bust.transform);
     // scene.translucent_meshes.items[0].transform = model_mat;
 
-    try render_opaque_meshes(view_projection_mat);
+    try renderOpaqueMeshes(view_projection_mat);
 
-    try process_meshes(scene.translucent_meshes, view_projection_mat);
+    try processMeshes(scene.translucent_meshes, view_projection_mat);
     std.mem.sort(Tri, tris.items, TriSortContext{ .camera_pos = camera_pos }, TriSortContext.compare);
-    try render_transcluent_meshes(view_projection_mat);
+    try renderTranscluentMeshes(view_projection_mat);
 
     opaque_fb.add(&transcluent_fb);
 }

@@ -74,19 +74,6 @@ pub const Tri = struct {
 
 const Polygon = struct { vertices: [10]Vertex, count: u8 };
 
-// TODO: Learn how this intersect code work
-fn get_intersect_t(start: Vec4, end: Vec4) f32 {
-    // const d_start = start.z + start.w;
-    // const d_end = end.z + end.w;
-
-    // t = dist_start / (dist_start - dist_end)
-    // We assume d_start and d_end have different signs (one in, one out)
-    // return d_start / (d_start - d_end);
-    const dz = end.z - start.z;
-    const dw = end.w - start.w;
-    return -(start.z + start.w) / (dz + dw);
-}
-
 fn insidePlane(vertex_in: Vertex, plane: ClippingPlane) bool {
     const vertex = vertex_in.position;
     switch (plane) {
