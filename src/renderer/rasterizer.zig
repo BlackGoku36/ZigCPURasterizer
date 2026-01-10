@@ -745,8 +745,8 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                 const eta = 1.0 / ior;
                                 //TODO: Improve this refraction code?
                                 const r = Vec3.normalize(Vec3.refract(view_dir.multf(-1.0), normal, eta));
-                                // const thickness = 0.5;
-                                const thickness = @abs(depth_buffer.getPixel(x, y) - z) * 500.0;
+                                // const thickness = 0.0;
+                                const thickness = @abs(depth_buffer.getPixel(x, y) - z);
                                 // TODO: it vec3 direction right?
                                 const new_r = Matrix4.multVec3Direction(view_projection_mat, r);
 
