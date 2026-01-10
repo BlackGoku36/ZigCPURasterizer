@@ -35,6 +35,14 @@ pub const Matrix4 = struct {
         return Matrix4{ .mat = out_mat };
     }
 
+    pub fn removeTranslation(mat: Matrix4) Matrix4 {
+        var new_mat = mat;
+        new_mat.mat[3] = 0.0;
+        new_mat.mat[7] = 0.0;
+        new_mat.mat[11] = 0.0;
+        return new_mat;
+    }
+
     pub fn getScale(x: f32, y: f32, z: f32) Matrix4 {
         const out_mat = [4 * 4]f32{
             x, 0, 0, 0,
@@ -97,17 +105,32 @@ pub const Matrix4 = struct {
         return out_mat;
     }
 
-    pub fn multVec3(mat: Matrix4, vec: Vec3) Vec3 {
+    pub fn multVec3Point(mat: Matrix4, vec: Vec3) Vec3 {
         var out_vec: Vec3 = Vec3{};
         out_vec.x = vec.x * mat.mat[0] + vec.y * mat.mat[1] + vec.z * mat.mat[2] + mat.mat[3];
         out_vec.y = vec.x * mat.mat[4] + vec.y * mat.mat[5] + vec.z * mat.mat[6] + mat.mat[7];
         out_vec.z = vec.x * mat.mat[8] + vec.y * mat.mat[9] + vec.z * mat.mat[10] + mat.mat[11];
         const w: f32 = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
 
+        if (w != 0.0 and w != 1.0) {
+            out_vec.x /= w;
+            out_vec.y /= w;
+            out_vec.z /= w;
+        }
+        return out_vec;
+    }
+
+    pub fn multVec3Direction(mat: Matrix4, vec: Vec3) Vec3 {
+        var out_vec: Vec3 = Vec3{};
+        out_vec.x = vec.x * mat.mat[0] + vec.y * mat.mat[1] + vec.z * mat.mat[2];
+        out_vec.y = vec.x * mat.mat[4] + vec.y * mat.mat[5] + vec.z * mat.mat[6];
+        out_vec.z = vec.x * mat.mat[8] + vec.y * mat.mat[9] + vec.z * mat.mat[10];
+        // const w: f32 = vec.x * mat.mat[12] + vec.y * mat.mat[13] + vec.z * mat.mat[14] + mat.mat[15];
+
         // if (w != 1.0) {
-        out_vec.x /= w;
-        out_vec.y /= w;
-        out_vec.z /= w;
+        // out_vec.x /= w;
+        // out_vec.y /= w;
+        // out_vec.z /= w;
         // }
         return out_vec;
     }
@@ -272,6 +295,30 @@ pub const Matrix4 = struct {
         out_mat.mat[15] = (m[8] * s3 - m[9] * s1 + m[10] * s0) * inv_det;
 
         return out_mat;
+    }
+
+    pub fn determinant(mat: Matrix4) f32 {
+        // var out_mat: Matrix4 = undefined;
+        const m = mat.mat;
+
+        // Calculate 2x2 sub-determinants for the first two columns
+        const s0 = m[0] * m[5] - m[4] * m[1];
+        const s1 = m[0] * m[6] - m[4] * m[2];
+        const s2 = m[0] * m[7] - m[4] * m[3];
+        const s3 = m[1] * m[6] - m[5] * m[2];
+        const s4 = m[1] * m[7] - m[5] * m[3];
+        const s5 = m[2] * m[7] - m[6] * m[3];
+
+        // Calculate 2x2 sub-determinants for the last two columns
+        const c5 = m[10] * m[15] - m[14] * m[11];
+        const c4 = m[9] * m[15] - m[13] * m[11];
+        const c3 = m[9] * m[14] - m[13] * m[10];
+        const c2 = m[8] * m[15] - m[12] * m[11];
+        const c1 = m[8] * m[14] - m[12] * m[10];
+        const c0 = m[8] * m[13] - m[12] * m[9];
+
+        // Calculate determinant
+        return s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;
     }
 
     pub fn print(self: Matrix4) void {
