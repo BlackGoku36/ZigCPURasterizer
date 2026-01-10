@@ -33,12 +33,11 @@ const Material = material_import.Material;
 
 const Mesh = @import("../mesh.zig").Mesh;
 const Scene = @import("../mesh.zig").Scene;
+const WindingOrder = @import("../mesh.zig").WindingOrder;
 
 const ltc = @import("ltc_lut.zig");
 const LTC1 = ltc.LTC1Vec;
 const LTC2 = ltc.LTC2Vec;
-
-const WindingOrder = enum { CW, CCW };
 
 const AABB = struct {
     min_x: u32,
@@ -82,7 +81,7 @@ fn windingOrderTest(order: WindingOrder, w0: f32, w1: f32, w2: f32) bool {
     }
 }
 
-fn windingOrderNone(_: WindingOrder, w0: f32, w1: f32, w2: f32) bool {
+fn windingOrderNone(w0: f32, w1: f32, w2: f32) bool {
     return (w0 >= 0 and w1 >= 0 and w2 >= 0) or
         (w0 <= 0 and w1 <= 0 and w2 <= 0);
 }
@@ -94,8 +93,6 @@ pub var transcluent_fb: RenderTargetRGBA16 = undefined;
 pub var depth_buffer: RenderTargetR16 = undefined;
 
 var scene: Scene = undefined;
-
-const winding_order = WindingOrder.CCW;
 
 var camera_pos = Vec3{ .x = -3.0, .y = 1.0, .z = 0.0 };
 
@@ -152,11 +149,7 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
         const model_view_projection_mat = Matrix4.multMatrix4(vp_matrix, model_mat);
 
         var indices_len: usize = 0;
-        if (mesh.indices_16) |indice_16| {
-            indices_len = indice_16.len;
-        } else if (mesh.indices_32) |indice_32| {
-            indices_len = indice_32.len;
-        }
+        indices_len = mesh.indices_32.len;
 
         // std.debug.print("Mesh name: {s}\n", .{mesh.name});
         var active_material: Material = undefined;
@@ -185,15 +178,10 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             var idx1: usize = 0;
             var idx2: usize = 0;
             var idx3: usize = 0;
-            if (mesh.indices_16) |indice_16| {
-                idx1 = @intCast(indice_16[i]);
-                idx2 = @intCast(indice_16[i + 1]);
-                idx3 = @intCast(indice_16[i + 2]);
-            } else if (mesh.indices_32) |indice_32| {
-                idx1 = @intCast(indice_32[i]);
-                idx2 = @intCast(indice_32[i + 1]);
-                idx3 = @intCast(indice_32[i + 2]);
-            }
+
+            idx1 = mesh.indices_32[i];
+            idx2 = mesh.indices_32[i + 1];
+            idx3 = mesh.indices_32[i + 2];
 
             const vert1 = Vec3{ .x = mesh.vertices[idx1 * 3 + 0], .y = mesh.vertices[idx1 * 3 + 1], .z = mesh.vertices[idx1 * 3 + 2] };
             const vert2 = Vec3{ .x = mesh.vertices[idx2 * 3 + 0], .y = mesh.vertices[idx2 * 3 + 1], .z = mesh.vertices[idx2 * 3 + 2] };
@@ -202,6 +190,16 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             const norm1 = Vec3{ .x = mesh.normals[idx1 * 3 + 0], .y = mesh.normals[idx1 * 3 + 1], .z = mesh.normals[idx1 * 3 + 2] };
             const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
             const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
+
+            var tan1 = Vec3.init(0.0);
+            var tan2 = Vec3.init(0.0);
+            var tan3 = Vec3.init(0.0);
+
+            if (mesh.tangents) |tangents| {
+                tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
+                tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
+                tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
+            }
 
             //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
             var uv1: Vec2 = undefined;
@@ -218,19 +216,15 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
                 uv3 = Vec2{ .x = 0.5, .y = 0.5 };
             }
 
-            const tan1 = geometry.calculateTangent(vert1, vert2, vert3, uv1, uv2, uv3);
-            const tan2 = geometry.calculateTangent(vert2, vert3, vert1, uv2, uv3, uv1);
-            const tan3 = geometry.calculateTangent(vert3, vert1, vert2, uv3, uv1, uv2);
-
             const normalMatrix = Matrix4.transpose(Matrix4.invert(model_mat));
 
-            const newNorm1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm1));
-            const newNorm2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm2));
-            const newNorm3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm3));
+            const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
+            const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
+            const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
 
-            var newTan1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan1));
-            var newTan2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan2));
-            var newTan3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan3));
+            var newTan1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan1));
+            var newTan2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan2));
+            var newTan3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan3));
 
             // T = normalize(T - dot(T, N) * N);
             newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
@@ -241,9 +235,9 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             const newBitan2 = Vec3.normalize(Vec3.cross(newTan2, newNorm2));
             const newBitan3 = Vec3.normalize(Vec3.cross(newTan3, newNorm3));
 
-            const world_pos1 = Matrix4.multVec3(model_mat, vert1);
-            const world_pos2 = Matrix4.multVec3(model_mat, vert2);
-            const world_pos3 = Matrix4.multVec3(model_mat, vert3);
+            const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
+            const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
+            const world_pos3 = Matrix4.multVec3Point(model_mat, vert3);
 
             const proj_vert1 = Matrix4.multVec4(model_view_projection_mat, vert1);
             const proj_vert2 = Matrix4.multVec4(model_view_projection_mat, vert2);
@@ -271,11 +265,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
         const model_view_projection_mat = Matrix4.multMatrix4(view_projection_mat, model_mat);
 
         var indices_len: usize = 0;
-        if (mesh.indices_16) |indice_16| {
-            indices_len = indice_16.len;
-        } else if (mesh.indices_32) |indice_32| {
-            indices_len = indice_32.len;
-        }
+        indices_len = mesh.indices_32.len;
 
         // std.debug.print("Mesh name: {s}\n", .{mesh.name});
         var active_material: Material = undefined;
@@ -304,15 +294,10 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
             var idx1: usize = 0;
             var idx2: usize = 0;
             var idx3: usize = 0;
-            if (mesh.indices_16) |indice_16| {
-                idx1 = @intCast(indice_16[i]);
-                idx2 = @intCast(indice_16[i + 1]);
-                idx3 = @intCast(indice_16[i + 2]);
-            } else if (mesh.indices_32) |indice_32| {
-                idx1 = @intCast(indice_32[i]);
-                idx2 = @intCast(indice_32[i + 1]);
-                idx3 = @intCast(indice_32[i + 2]);
-            }
+
+            idx1 = mesh.indices_32[i];
+            idx2 = mesh.indices_32[i + 1];
+            idx3 = mesh.indices_32[i + 2];
 
             const vert1 = Vec3{ .x = mesh.vertices[idx1 * 3 + 0], .y = mesh.vertices[idx1 * 3 + 1], .z = mesh.vertices[idx1 * 3 + 2] };
             const vert2 = Vec3{ .x = mesh.vertices[idx2 * 3 + 0], .y = mesh.vertices[idx2 * 3 + 1], .z = mesh.vertices[idx2 * 3 + 2] };
@@ -322,9 +307,15 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
             const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
             const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
 
-            // const norm1 = Vec3.normalize(Vec3.cross(Vec3.sub(vert1, vert2), Vec3.sub(vert1, vert3)));
-            // const norm2 = Vec3.normalize(Vec3.cross(Vec3.sub(vert2, vert3), Vec3.sub(vert2, vert1)));
-            // const norm3 = Vec3.normalize(Vec3.cross(Vec3.sub(vert3, vert1), Vec3.sub(vert3, vert2)));
+            var tan1 = Vec3.init(0.0);
+            var tan2 = Vec3.init(0.0);
+            var tan3 = Vec3.init(0.0);
+
+            if (mesh.tangents) |tangents| {
+                tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
+                tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
+                tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
+            }
 
             //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
             var uv1: Vec2 = undefined;
@@ -341,32 +332,29 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                 uv3 = Vec2{ .x = 0.5, .y = 0.5 };
             }
 
-            const tan1 = geometry.calculateTangent(vert1, vert2, vert3, uv1, uv2, uv3);
-            const tan2 = geometry.calculateTangent(vert2, vert3, vert1, uv2, uv3, uv1);
-            const tan3 = geometry.calculateTangent(vert3, vert1, vert2, uv3, uv1, uv2);
+            const normalMatrix = Matrix4.removeTranslation(Matrix4.transpose(Matrix4.invert(model_mat)));
+            // normalMatrix.
 
-            const normalMatrix = Matrix4.transpose(Matrix4.invert(model_mat));
+            const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
+            const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
+            const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
 
-            const newNorm1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm1));
-            const newNorm2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm2));
-            const newNorm3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, norm3));
-
-            var newTan1 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan1));
-            var newTan2 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan2));
-            var newTan3 = Vec3.normalize(Matrix4.multVec3(normalMatrix, tan3));
+            var newTan1 = Matrix4.multVec3Direction(normalMatrix, tan1);
+            var newTan2 = Matrix4.multVec3Direction(normalMatrix, tan2);
+            var newTan3 = Matrix4.multVec3Direction(normalMatrix, tan3);
 
             // T = normalize(T - dot(T, N) * N);
             newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
             newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
             newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
 
-            const newBitan1 = Vec3.normalize(Vec3.cross(newTan1, newNorm1));
-            const newBitan2 = Vec3.normalize(Vec3.cross(newTan2, newNorm2));
-            const newBitan3 = Vec3.normalize(Vec3.cross(newTan3, newNorm3));
+            const newBitan1 = Vec3.cross(newTan1, newNorm1);
+            const newBitan2 = Vec3.cross(newTan2, newNorm2);
+            const newBitan3 = Vec3.cross(newTan3, newNorm3);
 
-            const world_pos1 = Matrix4.multVec3(model_mat, vert1);
-            const world_pos2 = Matrix4.multVec3(model_mat, vert2);
-            const world_pos3 = Matrix4.multVec3(model_mat, vert3);
+            const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
+            const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
+            const world_pos3 = Matrix4.multVec3Point(model_mat, vert3);
 
             const proj_vert1 = Matrix4.multVec4(model_view_projection_mat, vert1);
             const proj_vert2 = Matrix4.multVec4(model_view_projection_mat, vert2);
@@ -377,7 +365,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
             tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2 };
             tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
 
-            if (Vec3.dot(newNorm1, Vec3.normalize(Vec3.sub(camera_pos, Matrix4.multVec3(model_mat, vert1)))) > -0.25) {
+            if (Vec3.dot(newNorm1, Vec3.normalize(Vec3.sub(camera_pos, Matrix4.multVec3Point(model_mat, vert1)))) > -0.25) {
                 var clipped_triangle: [8]Tri = undefined;
                 const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
 
@@ -417,7 +405,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                             var w_x2: f32 = w_y2;
 
                             while (x <= aabb.max_x) : (x += 1) {
-                                if (windingOrderNone(winding_order, w_x0, w_x1, w_x2)) {
+                                if (windingOrderTest(mesh.winding_order, w_x0, w_x1, w_x2)) {
                                     const area0 = w_x0 / area;
                                     const area1 = w_x1 / area;
                                     const area2 = w_x2 / area;
@@ -657,7 +645,7 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                     var w_x2: f32 = w_y2;
 
                     while (x <= aabb.max_x) : (x += 1) {
-                        if (windingOrderNone(winding_order, w_x0, w_x1, w_x2)) {
+                        if (windingOrderNone(w_x0, w_x1, w_x2)) {
                             const area0 = w_x0 / area;
                             const area1 = w_x1 / area;
                             const area2 = w_x2 / area;
@@ -759,7 +747,8 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                 const r = Vec3.normalize(Vec3.refract(view_dir.multf(-1.0), normal, eta));
                                 // const thickness = 0.5;
                                 const thickness = @abs(depth_buffer.getPixel(x, y) - z) * 500.0;
-                                const new_r = Matrix4.multVec3(view_projection_mat, r);
+                                // TODO: it vec3 direction right?
+                                const new_r = Matrix4.multVec3Direction(view_projection_mat, r);
 
                                 var uv_offset = Vec2{ .x = new_r.x * thickness, .y = new_r.y * thickness };
 

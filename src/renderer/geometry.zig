@@ -1,3 +1,4 @@
+const std = @import("std");
 const Vec4 = @import("../math/vec4.zig").Vec4;
 const Vec3 = @import("../math/vec3.zig").Vec3;
 const Vec2 = @import("../math/vec2.zig").Vec2;
@@ -161,6 +162,64 @@ fn clipPolygonAgainstAllPlane(polygon_in: *Polygon) u8 {
     return polygon_in.count;
 }
 
+pub fn calculateFaceNormals(pos1: Vec3, pos2: Vec3, pos3: Vec3) Vec3 {
+    const edge1 = Vec3.sub(pos2, pos1);
+    const edge2 = Vec3.sub(pos3, pos1);
+
+    const normal = Vec3.cross(edge1, edge2);
+
+    return Vec3.normalize(normal);
+}
+
+pub fn calculateVertexNormals(allocator: std.mem.Allocator, positions: []f32, indices: []u32) ![]f32 {
+    var face_normal_idx: u32 = 0;
+    var face_normals = try allocator.alloc(Vec3, @divExact(indices.len, 3));
+    defer allocator.free(face_normals);
+
+    var normals = try allocator.alloc(f32, positions.len);
+    @memset(normals, 0.0);
+
+    var i: u32 = 0;
+    while (i < indices.len) : (i += 3) {
+        const idx0: u32 = indices[i + 0] * 3;
+        const idx1: u32 = indices[i + 1] * 3;
+        const idx2: u32 = indices[i + 2] * 3;
+
+        const v0 = Vec3{ .x = positions[idx0], .y = positions[idx0 + 1], .z = positions[idx0 + 2] };
+        const v1 = Vec3{ .x = positions[idx1], .y = positions[idx1 + 1], .z = positions[idx1 + 2] };
+        const v2 = Vec3{ .x = positions[idx2], .y = positions[idx2 + 1], .z = positions[idx2 + 2] };
+
+        face_normals[face_normal_idx] = calculateFaceNormals(v0, v1, v2);
+        face_normal_idx += 1;
+    }
+    std.debug.assert(@divExact(indices.len, 3) == face_normal_idx);
+
+    i = 0;
+    while (i < indices.len) : (i += 3) {
+        const face_idx: usize = @divExact(i, 3);
+        const face_normal = face_normals[face_idx];
+
+        for (0..3) |j| {
+            const vertex_idx: u32 = @as(u32, @intCast(indices[i + j])) * 3;
+            normals[vertex_idx + 0] += face_normal.x;
+            normals[vertex_idx + 1] += face_normal.y;
+            normals[vertex_idx + 2] += face_normal.z;
+        }
+    }
+
+    for (0..@divExact(positions.len, 3)) |j| {
+        const idx = j * 3;
+        const length = @sqrt(normals[idx] * normals[idx] + normals[idx + 1] * normals[idx + 1] + normals[idx + 2] * normals[idx + 2]);
+        if (length > 0) {
+            normals[idx + 0] /= length;
+            normals[idx + 1] /= length;
+            normals[idx + 2] /= length;
+        }
+    }
+
+    return normals;
+}
+
 pub fn calculateTangent(pos1: Vec3, pos2: Vec3, pos3: Vec3, uv1: Vec2, uv2: Vec2, uv3: Vec2) Vec3 {
     const edge1: Vec3 = Vec3.sub(pos2, pos1);
     const edge2: Vec3 = Vec3.sub(pos3, pos1);
@@ -174,4 +233,57 @@ pub fn calculateTangent(pos1: Vec3, pos2: Vec3, pos3: Vec3, uv1: Vec2, uv2: Vec2
     tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
     tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
     return tangent;
+}
+
+pub fn calculateTangents(allocator: std.mem.Allocator, positions: []f32, uvs: []f32, indices: []u32) ![]f32 {
+    var face_tangent_idx: u32 = 0;
+    var face_tangents = try allocator.alloc(Vec3, @divExact(indices.len, 3));
+    defer allocator.free(face_tangents);
+
+    var tangents = try allocator.alloc(f32, positions.len);
+    @memset(tangents, 0.0);
+
+    var i: u32 = 0;
+    while (i < indices.len) : (i += 3) {
+        const idx0: u32 = indices[i + 0];
+        const idx1: u32 = indices[i + 1];
+        const idx2: u32 = indices[i + 2];
+
+        const v0 = Vec3{ .x = positions[idx0 * 3], .y = positions[idx0 * 3 + 1], .z = positions[idx0 * 3 + 2] };
+        const v1 = Vec3{ .x = positions[idx1 * 3], .y = positions[idx1 * 3 + 1], .z = positions[idx1 * 3 + 2] };
+        const v2 = Vec3{ .x = positions[idx2 * 3], .y = positions[idx2 * 3 + 1], .z = positions[idx2 * 3 + 2] };
+
+        const uv0 = Vec2{ .x = uvs[idx0 * 2], .y = uvs[idx0 * 2 + 1] };
+        const uv1 = Vec2{ .x = uvs[idx1 * 2], .y = uvs[idx1 * 2 + 1] };
+        const uv2 = Vec2{ .x = uvs[idx2 * 2], .y = uvs[idx2 * 2 + 1] };
+
+        face_tangents[face_tangent_idx] = calculateTangent(v0, v1, v2, uv0, uv1, uv2);
+        face_tangent_idx += 1;
+    }
+    std.debug.assert(@divExact(indices.len, 3) == face_tangent_idx);
+
+    i = 0;
+    while (i < indices.len) : (i += 3) {
+        const face_idx: usize = @divExact(i, 3);
+        const facen_tangent = face_tangents[face_idx];
+
+        for (0..3) |j| {
+            const vertex_idx: u32 = @as(u32, @intCast(indices[i + j])) * 3;
+            tangents[vertex_idx + 0] += facen_tangent.x;
+            tangents[vertex_idx + 1] += facen_tangent.y;
+            tangents[vertex_idx + 2] += facen_tangent.z;
+        }
+    }
+
+    for (0..@divExact(positions.len, 3)) |j| {
+        const idx = j * 3;
+        const length = @sqrt(tangents[idx] * tangents[idx] + tangents[idx + 1] * tangents[idx + 1] + tangents[idx + 2] * tangents[idx + 2]);
+        if (length > 0) {
+            tangents[idx + 0] /= length;
+            tangents[idx + 1] /= length;
+            tangents[idx + 2] /= length;
+        }
+    }
+
+    return tangents;
 }

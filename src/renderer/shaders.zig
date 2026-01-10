@@ -232,10 +232,10 @@ pub fn areaLightContribution(n: Vec3, v: Vec3, p: Vec3, mInv_: Matrix4, verts: [
     const minv = Matrix4.multMatrix4(mInv_, area_light_basis);
 
     var l: [5]Vec3 = [5]Vec3{
-        Matrix4.multVec3(minv, verts[0].sub(p)),
-        Matrix4.multVec3(minv, verts[1].sub(p)),
-        Matrix4.multVec3(minv, verts[2].sub(p)),
-        Matrix4.multVec3(minv, verts[3].sub(p)),
+        Matrix4.multVec3Point(minv, verts[0].sub(p)),
+        Matrix4.multVec3Point(minv, verts[1].sub(p)),
+        Matrix4.multVec3Point(minv, verts[2].sub(p)),
+        Matrix4.multVec3Point(minv, verts[3].sub(p)),
         Vec3.init(0.0),
     };
 

@@ -6,22 +6,25 @@ const Quat = @import("math/quaternion.zig").Quat;
 const Gltf = @import("zgltf").Gltf;
 const GltfMaterial = Gltf.Material;
 const PBRMaterial = @import("material.zig").Material;
+const geometry = @import("renderer/geometry.zig");
 
 pub const MaterialInfo = struct {
     material_name: []u8,
     index_end: usize,
 };
 
+pub const WindingOrder = enum { CW, CCW };
 pub const Mesh = struct {
     vertices: []f32,
     uvs: [3][]f32,
     uvs_count: u8,
     normals: []f32,
+    tangents: ?[]f32,
     name: []u8,
-    indices_16: ?[]u16,
-    indices_32: ?[]u32,
+    indices_32: []u32,
     transform: Matrix4,
     material: ?usize,
+    winding_order: WindingOrder = .CCW,
     should_render: bool = true,
 };
 
@@ -96,14 +99,22 @@ pub fn getMeshFromNode(
         // TODO: primitives means subgroups of mesh and not entire mesh
 
         var vertices: []f32 = undefined;
-        var normals: []f32 = undefined;
+        var normals: ?[]f32 = null;
+        var tangents: ?[]f32 = null;
         var uvs: [3][]f32 = undefined;
-        var indices_16: ?[]u16 = null;
-        var indices_32: ?[]u32 = null;
+        var indices_32: []u32 = undefined;
+
+        var winding_order: WindingOrder = .CCW;
 
         const indices_accessor = gltf.data.accessors[p.indices.?];
         if (indices_accessor.component_type == .unsigned_short) {
-            indices_16 = try gltf.getDataFromBufferView(u16, allocator, indices_accessor, binary);
+            const indices_16 = try gltf.getDataFromBufferView(u16, allocator, indices_accessor, binary);
+            const buffer = try allocator.alloc(u32, indices_16.len);
+            for (0..indices_16.len) |i| {
+                buffer[i] = indices_16[i];
+            }
+            allocator.free(indices_16);
+            indices_32 = buffer;
         } else {
             indices_32 = try gltf.getDataFromBufferView(u32, allocator, indices_accessor, binary);
         }
@@ -124,6 +135,10 @@ pub fn getMeshFromNode(
                     uvs[tex_coord_count] = try gltf.getDataFromBufferView(f32, allocator, accessor, binary);
                     tex_coord_count += 1;
                 },
+                .tangent => |accessor_index| {
+                    const accessor = gltf.data.accessors[accessor_index];
+                    tangents = try gltf.getDataFromBufferView(f32, allocator, accessor, binary);
+                },
                 .color => {
                     std.debug.print("Color attribute found! Must color_factor by this! Not Implemented Yet!\n", .{});
                 },
@@ -133,93 +148,48 @@ pub fn getMeshFromNode(
             }
         }
 
-        const new_normals = try allocator.alloc(f32, normals.len);
-        allocator.free(normals);
-
-        var indices_len: usize = 0;
-        if (indices_16) |indice_16| {
-            indices_len = indice_16.len;
-        } else if (indices_32) |indice_32| {
-            indices_len = indice_32.len;
+        if (transform.determinant() < 0.0) {
+            winding_order = .CW;
+        } else {
+            winding_order = .CCW;
         }
 
-        var i: usize = 0;
-        while (i < indices_len) : (i += 3) {
-            var idx1: usize = 0;
-            var idx2: usize = 0;
-            var idx3: usize = 0;
-            if (indices_16) |indice_16| {
-                idx1 = @intCast(indice_16[i]);
-                idx2 = @intCast(indice_16[i + 1]);
-                idx3 = @intCast(indice_16[i + 2]);
-            } else if (indices_32) |indice_32| {
-                idx1 = @intCast(indice_32[i]);
-                idx2 = @intCast(indice_32[i + 1]);
-                idx3 = @intCast(indice_32[i + 2]);
-            }
-
-            const vert1 = Vec3{ .x = vertices[idx1 * 3 + 0], .y = vertices[idx1 * 3 + 1], .z = vertices[idx1 * 3 + 2] };
-            const vert2 = Vec3{ .x = vertices[idx2 * 3 + 0], .y = vertices[idx2 * 3 + 1], .z = vertices[idx2 * 3 + 2] };
-            const vert3 = Vec3{ .x = vertices[idx3 * 3 + 0], .y = vertices[idx3 * 3 + 1], .z = vertices[idx3 * 3 + 2] };
-
-            const edge1 = Vec3.sub(vert1, vert2);
-            const edge2 = Vec3.sub(vert2, vert3);
-
-            const cross = Vec3.cross(edge1, edge2);
-
-            new_normals[idx1 * 3 + 0] += cross.x;
-            new_normals[idx2 * 3 + 0] += cross.x;
-            new_normals[idx3 * 3 + 0] += cross.x;
-
-            new_normals[idx1 * 3 + 1] += cross.y;
-            new_normals[idx2 * 3 + 1] += cross.y;
-            new_normals[idx3 * 3 + 1] += cross.y;
-
-            new_normals[idx1 * 3 + 2] += cross.z;
-            new_normals[idx2 * 3 + 2] += cross.z;
-            new_normals[idx3 * 3 + 2] += cross.z;
+        if (normals == null) {
+            normals = try geometry.calculateVertexNormals(allocator, vertices, indices_32);
+        }
+        if (tangents == null and tex_coord_count > 0) {
+            //TODO: we are using the first uvs. what about others?
+            tangents = try geometry.calculateTangents(allocator, vertices, uvs[0], indices_32);
         }
 
-        // if (p.material) |material| {
         const material = gltf.data.materials[p.material.?];
         if (material.transmission_factor > 0.0 or material.transmission_texture != null) {
             try transcluent_meshes.append(allocator, Mesh{
                 .vertices = vertices,
                 .uvs = uvs,
                 .uvs_count = tex_coord_count,
-                .normals = new_normals,
-                .indices_16 = indices_16,
+                .normals = normals.?,
+                .tangents = tangents,
                 .indices_32 = indices_32,
                 .name = name,
                 .transform = transform,
                 .material = p.material,
+                .winding_order = winding_order,
             });
         } else {
             try opaque_meshes.append(allocator, Mesh{
                 .vertices = vertices,
                 .uvs = uvs,
                 .uvs_count = tex_coord_count,
-                .normals = new_normals,
-                .indices_16 = indices_16,
+                .normals = normals.?,
+                .tangents = tangents,
                 .indices_32 = indices_32,
                 .name = name,
                 .transform = transform,
                 .material = p.material,
+                .winding_order = winding_order,
             });
         }
-        // }
-
-        // try meshes.append(allocator, Mesh{
-        //     .vertices = vertices,
-        //     .uvs = uvs,
-        //     .uvs_count = tex_coord_count,
-        //     .normals = new_normals,
-        //     .indices_16 = indices_16,
-        //     .indices_32 = indices_32,
-        //     .name = name,
-        //     .transform = transform,
-        //     .material = p.material,
-        // });
     }
 }
 
@@ -434,17 +404,10 @@ pub const Scene = struct {
                                 var area_idx5: usize = 0;
                                 var area_idx6: usize = 0;
 
-                                if (m.indices_16) |indice_16| {
-                                    area_idx1 = @intCast(indice_16[0]);
-                                    area_idx2 = @intCast(indice_16[1]);
-                                    area_idx5 = @intCast(indice_16[4]);
-                                    area_idx6 = @intCast(indice_16[5]);
-                                } else if (m.indices_32) |indice_32| {
-                                    area_idx1 = @intCast(indice_32[0]);
-                                    area_idx2 = @intCast(indice_32[1]);
-                                    area_idx5 = @intCast(indice_32[4]);
-                                    area_idx6 = @intCast(indice_32[5]);
-                                }
+                                area_idx1 = m.indices_32[0];
+                                area_idx2 = m.indices_32[1];
+                                area_idx5 = m.indices_32[4];
+                                area_idx6 = m.indices_32[5];
 
                                 var area_vert1 = Vec3{ .x = m.vertices[area_idx1 * 3 + 0], .y = m.vertices[area_idx1 * 3 + 1], .z = m.vertices[area_idx1 * 3 + 2] };
                                 var area_vert2 = Vec3{ .x = m.vertices[area_idx2 * 3 + 0], .y = m.vertices[area_idx2 * 3 + 1], .z = m.vertices[area_idx2 * 3 + 2] };
@@ -452,16 +415,22 @@ pub const Scene = struct {
                                 var area_vert4 = Vec3{ .x = m.vertices[area_idx6 * 3 + 0], .y = m.vertices[area_idx6 * 3 + 1], .z = m.vertices[area_idx6 * 3 + 2] };
 
                                 const transform = getMatrixFromNode(node, matrix);
-                                area_vert1 = Matrix4.multVec3(transform, area_vert1);
-                                area_vert2 = Matrix4.multVec3(transform, area_vert2);
-                                area_vert3 = Matrix4.multVec3(transform, area_vert3);
-                                area_vert4 = Matrix4.multVec3(transform, area_vert4);
+                                if (transform.determinant() <= 0.0) {
+                                    area_vert1 = Matrix4.multVec3Point(transform, area_vert4);
+                                    area_vert2 = Matrix4.multVec3Point(transform, area_vert3);
+                                    area_vert3 = Matrix4.multVec3Point(transform, area_vert2);
+                                    area_vert4 = Matrix4.multVec3Point(transform, area_vert1);
+                                } else {
+                                    area_vert1 = Matrix4.multVec3Point(transform, area_vert1);
+                                    area_vert2 = Matrix4.multVec3Point(transform, area_vert2);
+                                    area_vert3 = Matrix4.multVec3Point(transform, area_vert3);
+                                    area_vert4 = Matrix4.multVec3Point(transform, area_vert4);
+                                }
 
                                 const material_idx = m.material.?;
                                 const mesh_material = materials.items[material_idx];
                                 const emission = mesh_material.pbr_solid.?.emissive;
 
-                                // const mesh_idx = node.mesh.?;
                                 try lights.append(allocator, Light{
                                     .pos = Vec3.init(0.0),
                                     .range = 0.0,
@@ -611,11 +580,7 @@ pub const Scene = struct {
             for (0..mesh.uvs_count) |i| {
                 allocator.free(mesh.uvs[i]);
             }
-            if (mesh.indices_16) |indices| {
-                allocator.free(indices);
-            } else {
-                allocator.free(mesh.indices_32.?);
-            }
+            allocator.free(mesh.indices_32);
         }
         for (meshes.translucent_meshes.items) |mesh| {
             allocator.free(mesh.vertices);
@@ -623,11 +588,7 @@ pub const Scene = struct {
             for (0..mesh.uvs_count) |i| {
                 allocator.free(mesh.uvs[i]);
             }
-            if (mesh.indices_16) |indices| {
-                allocator.free(indices);
-            } else {
-                allocator.free(mesh.indices_32.?);
-            }
+            allocator.free(mesh.indices_32);
         }
         meshes.opaque_meshes.deinit(allocator);
         meshes.translucent_meshes.deinit(allocator);
