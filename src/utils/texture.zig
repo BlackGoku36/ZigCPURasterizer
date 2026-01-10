@@ -388,9 +388,11 @@ pub const PBRTexture = struct {
             file.close();
             rm_tex.?.deinit(allocator);
         }
-        if (occlusion_file) |file| {
-            file.close();
-            occlusion_tex.?.deinit(allocator);
+        if (occlusion and occlusion_seperate) {
+            if (occlusion_file) |file| {
+                file.close();
+                occlusion_tex.?.deinit(allocator);
+            }
         }
         if (emissive_file) |file| {
             file.close();
