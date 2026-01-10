@@ -376,6 +376,31 @@ pub const PBRTexture = struct {
             }
         }
 
+        if (albedo_file) |file| {
+            file.close();
+            albedo_tex.?.deinit(allocator);
+        }
+        if (normal_file) |file| {
+            file.close();
+            normal_tex.?.deinit(allocator);
+        }
+        if (rm_file) |file| {
+            file.close();
+            rm_tex.?.deinit(allocator);
+        }
+        if (occlusion_file) |file| {
+            file.close();
+            occlusion_tex.?.deinit(allocator);
+        }
+        if (emissive_file) |file| {
+            file.close();
+            emissive_tex.?.deinit(allocator);
+        }
+        if (transmission_file) |file| {
+            file.close();
+            transmission_tex.?.deinit(allocator);
+        }
+
         return PBRTexture{
             .width = alloc_width,
             .height = alloc_height,
