@@ -14,6 +14,7 @@ pub const Material = struct {
     pbr_solid: ?PBRSolid,
     type: MaterialType,
     tex_coord: u8 = 0,
+    blend: bool,
     name: ?[]const u8,
 
     pub fn fromGltfTextureFiles(
@@ -34,6 +35,7 @@ pub const Material = struct {
         alpha_cutoff: f32,
         transmission_factor: f32,
         ior: f32,
+        blend: bool,
         allocator: std.mem.Allocator,
     ) Material {
         var mat: PBRTexture = undefined;
@@ -54,6 +56,7 @@ pub const Material = struct {
             .alpha_cutoff = alpha_cutoff,
             .transmission_factor = transmission_factor,
             .ior = ior,
+            .blend = blend,
         }, allocator)) |pbr| {
             mat = pbr;
         } else |err| {
@@ -66,6 +69,7 @@ pub const Material = struct {
             .name = material_name,
             .type = .Textured,
             .tex_coord = 0,
+            .blend = blend,
         };
     }
 
@@ -78,6 +82,7 @@ pub const Material = struct {
         emissive_rgb: [3]f32,
         transmission: f32,
         ior: f32,
+        blend: bool,
     ) Material {
         return Material{
             .pbr_solid = PBRSolid{
@@ -93,6 +98,7 @@ pub const Material = struct {
             .name = name,
             .type = .Solid,
             .tex_coord = 0,
+            .blend = blend,
         };
     }
 

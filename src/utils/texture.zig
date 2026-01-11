@@ -86,6 +86,7 @@ pub const PBRTextureDescriptor = struct {
     alpha_cutoff: f32,
     transmission_factor: f32,
     ior: f32,
+    blend: bool,
 };
 
 pub const PBRTexture = struct {
@@ -285,6 +286,9 @@ pub const PBRTexture = struct {
                     // _buffer[out_index].roughness = @floatCast(desc.roughness_factor);
                     // _buffer[out_index].ao = 1.0;
                     // _buffer[out_index].transmission = 0.0;
+                    if (desc.blend) {
+                        _buffer[out_index].transmission = @floatCast(1.0 - albedo_value[3] * desc.color_factor[3]);
+                    }
                     _buffer[out_index].emissive = RGB{
                         .x = @floatCast(desc.emissive_factor[0] * desc.emissive_strength),
                         .y = @floatCast(desc.emissive_factor[1] * desc.emissive_strength),

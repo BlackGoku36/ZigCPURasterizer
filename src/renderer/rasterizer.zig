@@ -170,6 +170,7 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
                 .name = "Material Less",
                 .tex_coord = 0,
                 .type = .Solid,
+                .blend = false,
             };
         }
 
@@ -286,6 +287,7 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                 .name = "Material Less",
                 .tex_coord = 0,
                 .type = .Solid,
+                .blend = false,
             };
         }
 
@@ -895,34 +897,30 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                     }
                                 }
 
-                                // const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
-                                // var color = Vec3.add(ambient, Lo);
                                 var color = Lo;
                                 color = color.add(emissive);
-                                // color = color.divv(color.add(Vec3.init(1.0)));
-                                // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
-                                if (transmission > 0.0) {
-                                    // const prev_color = transcluent_fb.getPixel(x, y);
-                                    // const blend_factor: f16 = 0.5;
-                                    // const blend = Color{
-                                    // .r = @as(f16, @floatCast(srgb.r)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
-                                    // .g = @as(f16, @floatCast(srgb.g)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
-                                    // .b = @as(f16, @floatCast(srgb.b)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
-                                    // };
 
-                                    // opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
-                                    // transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
-                                    // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(blend.r), .g = @floatCast(blend.g), .b = @floatCast(blend.b) }, 1.0);
-                                    // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
-                                    transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
-                                    depth_buffer.putPixel(x, y, z);
+                                if (transmission > 0.0) {
+                                    if (active_material.blend) {
+                                        const prev_color = opaque_fb.getPixel(x, y);
+                                        const blend_factor: f16 = transmission;
+                                        const blend = Color{
+                                            .r = @as(f16, @floatCast(color.x)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
+                                            .g = @as(f16, @floatCast(color.y)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
+                                            .b = @as(f16, @floatCast(color.z)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
+                                        };
+
+                                        transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                        opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                        depth_buffer.putPixel(x, y, z);
+                                    } else {
+                                        transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
+                                        depth_buffer.putPixel(x, y, z);
+                                    }
                                 } else {
                                     opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
-                                    // opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
                                     depth_buffer.putPixel(x, y, z);
                                 }
-                                // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
-                                // depth_buffer.putPixel(x, y, @floatCast(z));
                             }
                         }
                         w_x0 += dy0;

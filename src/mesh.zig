@@ -163,7 +163,7 @@ pub fn getMeshFromNode(
         }
 
         const material = gltf.data.materials[p.material.?];
-        if (material.transmission_factor > 0.0 or material.transmission_texture != null) {
+        if (material.transmission_factor > 0.0 or material.transmission_texture != null or material.alpha_mode == .blend) {
             try transcluent_meshes.append(allocator, Mesh{
                 .vertices = vertices,
                 .uvs = uvs,
@@ -295,6 +295,7 @@ pub fn getTexturedMaterialGltf(gltf: Gltf, material: GltfMaterial, parent_path: 
         material.alpha_cutoff,
         material.transmission_factor,
         material.ior,
+        if (material.alpha_mode == .blend) true else false,
         allocator,
     );
 
@@ -379,6 +380,7 @@ pub const Scene = struct {
                     emissive_rgb,
                     material.transmission_factor,
                     material.ior,
+                    if (material.alpha_mode == .blend) true else false,
                 );
             }
 
