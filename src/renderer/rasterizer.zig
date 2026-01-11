@@ -92,7 +92,7 @@ pub var opaque_fb: RenderTargetRGBA16 = undefined;
 pub var transcluent_fb: RenderTargetRGBA16 = undefined;
 pub var depth_buffer: RenderTargetR16 = undefined;
 
-var scene: Scene = undefined;
+pub var scene: Scene = undefined;
 
 var camera_pos = Vec3{ .x = -3.0, .y = 1.0, .z = 0.0 };
 
@@ -580,10 +580,11 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                                         // var color = Vec3.add(ambient, Lo);
                                         var color = Lo;
                                         color = color.add(emissive);
-                                        color = color.divv(color.add(Vec3.init(1.0)));
-                                        const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
+                                        // color = color.divv(color.add(Vec3.init(1.0)));
+                                        // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
 
-                                        opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                        // opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                        opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
                                         depth_buffer.putPixel(x, y, @floatCast(z));
                                     }
                                 }
@@ -768,8 +769,9 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
 
                                 const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
 
-                                const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
-                                const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
+                                // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
+                                // const linear = zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b);
+                                const bg_color = Vec3{ .x = bg.r, .y = bg.g, .z = bg.b };
 
                                 for (scene.lights.items) |light| {
                                     if (light.type == .Area) {
@@ -897,8 +899,8 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                 // var color = Vec3.add(ambient, Lo);
                                 var color = Lo;
                                 color = color.add(emissive);
-                                color = color.divv(color.add(Vec3.init(1.0)));
-                                const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
+                                // color = color.divv(color.add(Vec3.init(1.0)));
+                                // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
                                 if (transmission > 0.0) {
                                     // const prev_color = transcluent_fb.getPixel(x, y);
                                     // const blend_factor: f16 = 0.5;
@@ -911,10 +913,12 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                     // opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
                                     // transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
                                     // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(blend.r), .g = @floatCast(blend.g), .b = @floatCast(blend.b) }, 1.0);
-                                    transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
                                     depth_buffer.putPixel(x, y, z);
                                 } else {
-                                    opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
+                                    // opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
                                     depth_buffer.putPixel(x, y, z);
                                 }
                                 // transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
