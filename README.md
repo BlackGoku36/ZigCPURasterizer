@@ -50,6 +50,10 @@ Lumberyard Bistro:
 
 ![screenshot2](screenshot3.png)
 
+![screenshot2](screenshot3.hdr)
+
+![screenshot2](camera_0.exr)
+
 ---
 
 Some refs:
