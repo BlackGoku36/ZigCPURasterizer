@@ -16,7 +16,7 @@ pub const MaterialInfo = struct {
 pub const WindingOrder = enum { CW, CCW };
 pub const Mesh = struct {
     vertices: []f32,
-    uvs: [3][]f32,
+    uvs: [4][]f32,
     uvs_count: u8,
     normals: []f32,
     tangents: ?[]f32,
@@ -101,7 +101,7 @@ pub fn getMeshFromNode(
         var vertices: []f32 = undefined;
         var normals: ?[]f32 = null;
         var tangents: ?[]f32 = null;
-        var uvs: [3][]f32 = undefined;
+        var uvs: [4][]f32 = undefined;
         var indices_32: []u32 = undefined;
 
         var winding_order: WindingOrder = .CCW;
