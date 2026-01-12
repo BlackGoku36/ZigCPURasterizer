@@ -40,19 +40,27 @@ Screenshot:
 
 The Junk Shop:
 
-![screenshot](screenshot1.png)
+<!--![screenshot](screenshot1.png)-->
+![screenshot](0_junkshop.avif)
 
 Lumberyard Bistro:
 
-![screenshot2](screenshot2.png)
+<!--![screenshot2](screenshot2.png)-->
+![screenshot2](0_bistro.avif)
 
-[Marble Bust](https://polyhaven.com/a/marble_bust_01):
+![screenshot2](2_bistro.avif)
 
-![screenshot2](screenshot3.png)
+<!--[Marble Bust](https://polyhaven.com/a/marble_bust_01):-->
 
-![screenshot2](screenshot3.hdr)
+<!--![screenshot2](screenshot3.png)-->
 
-![screenshot2](camera_0.exr)
+[Iron Howl v8](https://sketchfab.com/3d-models/iron-howl-v8-47a361137a3749858d21b2ce8bcbe21e)
+
+![screenshot2](0_iron_howl_v8.avif)
+
+![screenshot2](1_iron_howl_v8.avif)
+
+<!--![screenshot2](camera_0.exr)-->
 
 ---
 
