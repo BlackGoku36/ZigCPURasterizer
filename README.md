@@ -5,62 +5,52 @@ A CPU Rasterizer written in Zig during my free time for fun and to learn.
 - Lights: Area, Point, Directional
 - Texture (Bilinear sampling)
 - Transmission shading (with crude screen-space refraction)
+- Exports to `.hdr` (HDR range) and `.png` (SDR range)
 - glTF format (W.I.P, doesn't support .glb file, spotlight, among some other things)
 
 Zig version: 0.15.2
 
 ## Build Instructions
 
-Put glTF (.gltf) in project_root/assets/ with below structure:
+In project root, do:
 
 ```
-project_root/
-		assets/
-				some_demo/
-						demo.gltf
-						demo.bin
-								textures/
-										...
+zig build -Doptimize=ReleaseFast
 ```
 
-Replace similar line with your own gltf files in `src/renderer/rasterizer.zig - init()`:
+Find the exe in `zig-out/bin` named `ZigCPURasterizer`.
+
+For interactive mode:
 
 ```
-scene = try Scene.fromGLTFFile("assets/some_demo/demo.gltf", allocator);
+./ZigCPURasterizer --interactive -i path/to/demo.gltf
 ```
 
-Run (in project_root):
+For static image exports (two format are supported `.png` and `.hdr`):
 
 ```
-zig build run -Doptimize=ReleaseFast
+./ZigCPURasterizer -i path/to/demo.gltf -o image.png
 ```
+
 ---
 
 Screenshot:
 
 The Junk Shop:
 
-<!--![screenshot](screenshot1.png)-->
 ![screenshot](0_junkshop.avif)
 
 Lumberyard Bistro:
 
-<!--![screenshot2](screenshot2.png)-->
 ![screenshot2](0_bistro.avif)
 
 ![screenshot2](2_bistro.avif)
-
-<!--[Marble Bust](https://polyhaven.com/a/marble_bust_01):-->
-
-<!--![screenshot2](screenshot3.png)-->
 
 [Iron Howl v8](https://sketchfab.com/3d-models/iron-howl-v8-47a361137a3749858d21b2ce8bcbe21e)
 
 ![screenshot2](0_iron_howl_v8.avif)
 
 ![screenshot2](1_iron_howl_v8.avif)
-
-<!--![screenshot2](camera_0.exr)-->
 
 ---
 
