@@ -56,6 +56,26 @@ Lumberyard Bistro:
 
 ---
 
+Converting `.hdr` file to `.avif` (supported by both Safari/Chrome) or `.jxl` (supported by Safari only) to display on web.
+
+```
+ffmpeg -i camera_0.hdr \
+  -vf "format=gbrpf32le,exposure=1,zscale=tin=linear:pin=bt709:rin=full:t=smpte2084:p=smpte432:r=full" \
+  -c:v libaom-av1 -crf 10 -cpu-used 4 \
+  -color_primaries smpte432 -color_trc smpte2084 -colorspace bt2020nc \
+  test.avif
+```
+
+```
+ffmpeg -i camera_0.hdr \
+  -vf "format=gbrpf32le,exposure=1,zscale=tin=linear:pin=bt709:rin=full:t=smpte2084:p=smpte432:r=full" \
+  -c:v libjxl \
+  -color_primaries smpte432 -color_trc smpte2084 -colorspace bt2020nc \
+  test.jxl
+```
+
+---
+
 Some refs:
 
 - https://www.scratchapixel.com/ (Huge thanks)

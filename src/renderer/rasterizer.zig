@@ -968,6 +968,11 @@ pub fn render(_: f32, camera: usize) !void {
 
     const cam = scene.cameras.items[camera % scene.cameras.items.len];
 
+    height_f32 = width_f32 * (1.0 / cam.aspect_ratio);
+
+    width = @intFromFloat(@round(width_f32));
+    height = @intFromFloat(@round(height_f32));
+
     camera_pos = cam.pos;
     view_mat = cam.view_matrix;
     projection_mat = Matrix4.perspectiveProjection(cam.fov, cam.aspect_ratio, 0.1, 100.0);

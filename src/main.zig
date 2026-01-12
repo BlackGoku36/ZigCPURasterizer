@@ -200,9 +200,6 @@ export fn cleanup() void {
 }
 
 pub fn main() !void {
-    // const cols: []Color = undefined;
-    // try Radiance.writeToDisk("test.hdr", 1024, 1024);
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -219,31 +216,35 @@ pub fn main() !void {
             };
             defer rasterizer.deinit();
 
-            // try rasterizer.render(0.0, 0);
-            // pub fn renderAllCameras() !void {
+            const output_hdr = false;
+
             var file_name_buffer: [100]u8 = undefined;
             for (0..rasterizer.scene.cameras.items.len) |idx| {
                 try rasterizer.render(0, idx);
-                const formated_string = try std.fmt.bufPrint(&file_name_buffer, "camera_{d}.hdr", .{idx});
-                try Radiance.writeToDisk(formated_string, &rasterizer.opaque_fb);
+
+                if (output_hdr) {
+                    const formated_string = try std.fmt.bufPrint(&file_name_buffer, "camera_{d}.hdr", .{idx});
+                    try Radiance.writeToDisk(formated_string, &rasterizer.opaque_fb);
+                } else {
+                    const width = rasterizer.opaque_fb.width;
+                    const height = rasterizer.opaque_fb.height;
+
+                    var image_write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+                    var image = try zigimg.Image.create(allocator, width, height, .rgb24);
+                    defer image.deinit(allocator);
+
+                    for (0..height) |y| {
+                        for (0..width) |x| {
+                            const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
+                            const col_srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.color(col));
+                            image.pixels.rgb24[y * width + x] = zigimg.color.Rgb24.from.color(col_srgb);
+                        }
+                    }
+
+                    const formated_string = try std.fmt.bufPrint(&file_name_buffer, "camera_{d}.png", .{idx});
+                    try image.writeToFilePath(allocator, formated_string, &image_write_buffer, .{ .png = .{} });
+                }
             }
-            // }
-
-            // const width = rasterizer.width;
-            // const height = rasterizer.height;
-            // var image = try zigimg.Image.create(allocator, width, height, .rgb24);
-            // defer image.deinit(allocator);
-
-            // for (0..height) |y| {
-            // for (0..width) |x| {
-            // const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
-            // const col_u8 = zigimg.color.Rgb24.from.color(col);
-            // image.pixels.rgb24[y * width + x] = col_u8;
-            // }
-            // }
-
-            // var image_write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-            // try image.writeToFilePath(allocator, "out.png", &image_write_buffer, .{ .png = .{} });
         } else {
             std.debug.print("Error: Expected path containing a glTF file, found {s}\n", .{gltf_file_path});
         }

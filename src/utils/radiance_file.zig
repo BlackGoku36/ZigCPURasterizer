@@ -1,7 +1,6 @@
 const std = @import("std");
 const RenderTargetRGBA16 = @import("../renderer/rendertarget.zig").RenderTargetRGBA16;
 const Color = @import("../renderer/rendertarget.zig").Color;
-// pub const Color = struct { r: f32, g: f32, b: f32 };
 
 pub const RadianceRGBE = struct {
     r: u8,
@@ -49,13 +48,8 @@ pub const Radiance = struct {
 
         for (0..rendertarget.height) |y| {
             for (0..rendertarget.width) |x| {
-                // const c = Color{
-                // .r = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(width)),
-                // .g = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(width)),
-                // .b = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(width)),
-                // };
-                // const c = pixels[y * width + x];
                 const radiance_c = RadianceRGBE.fromColor(rendertarget.getPixel(@intCast(x), @intCast(y)));
+
                 try writer.writeByte(radiance_c.r);
                 try writer.writeByte(radiance_c.g);
                 try writer.writeByte(radiance_c.b);
