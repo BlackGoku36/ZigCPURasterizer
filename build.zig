@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) !void {
     const zgltf = b.dependency("zgltf", .{});
     const zgltf_module = zgltf.module("zgltf");
 
+    const clap = b.dependency("clap", .{});
+    const clap_module = clap.module("clap");
+
     const exe = b.addExecutable(.{
         .name = "ZigCPURasterizer",
         .root_module = b.createModule(.{
@@ -29,6 +32,7 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "zigimg", .module = zigimg_module },
                 .{ .name = "shader", .module = try createShaderModule(b, sokol_dep, sokol_module) },
                 .{ .name = "zgltf", .module = zgltf_module },
+                .{ .name = "clap", .module = clap_module },
             },
             .target = target,
             .optimize = optimization,

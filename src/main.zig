@@ -10,6 +10,7 @@ const sgapp = sokol.app_gfx_glue;
 const shd = @import("shader");
 const rasterizer = @import("renderer/rasterizer.zig");
 const zigimg = @import("zigimg");
+const clap = @import("clap");
 
 const Color = @import("renderer/rendertarget.zig").Color;
 const Radiance = @import("utils/radiance_file.zig").Radiance;
@@ -26,9 +27,11 @@ const state = struct {
     var dbg_bind: sg.Bindings = .{};
 };
 
+var interactive_input_file: []const u8 = undefined;
+
 export fn init() void {
-    rasterizer.init("assets/damaged_helmet/Untitled.gltf") catch |err| {
-        std.debug.print("error: {any}", .{err});
+    rasterizer.init(interactive_input_file) catch |err| {
+        std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
     };
 
     sg.setup(.{
@@ -204,51 +207,104 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var interactive = false;
+    var input_file: []const u8 = undefined;
+    var output_file: []const u8 = undefined;
+    input_file.len = 0;
+    output_file.len = 0;
+    var input_file_extension: []const u8 = undefined;
+    var output_file_extension: []const u8 = undefined;
+    input_file_extension.len = 0;
+    output_file.len = 0;
 
-    if (args.len > 1) {
-        const gltf_file_path = args[1];
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\--interactive             Display this help and exit.
+        \\-i, --input <str>   An option parameter, which takes a value.
+        \\-o, --output <str>  An option parameter which can be specified multiple times.
+        \\
+    );
 
-        if (std.mem.eql(u8, std.fs.path.extension(gltf_file_path), ".gltf")) {
-            rasterizer.init(gltf_file_path) catch |err| {
-                std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
-            };
-            defer rasterizer.deinit();
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+        .assignment_separators = "=:",
+    }) catch |err| {
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    };
+    defer res.deinit();
 
-            const output_hdr = false;
+    if (res.args.help != 0 or (res.args.interactive == 0 and res.args.input == null and res.args.output == null)) {
+        std.debug.print("{s}", .{help_string});
+        return;
+    }
 
-            var file_name_buffer: [100]u8 = undefined;
-            for (0..rasterizer.scene.cameras.items.len) |idx| {
-                try rasterizer.render(0, idx);
+    if (res.args.interactive != 0) {
+        interactive = true;
+    }
 
-                if (output_hdr) {
-                    const formated_string = try std.fmt.bufPrint(&file_name_buffer, "camera_{d}.hdr", .{idx});
-                    try Radiance.writeToDisk(formated_string, &rasterizer.opaque_fb);
-                } else {
-                    const width = rasterizer.opaque_fb.width;
-                    const height = rasterizer.opaque_fb.height;
-
-                    var image_write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-                    var image = try zigimg.Image.create(allocator, width, height, .rgb24);
-                    defer image.deinit(allocator);
-
-                    for (0..height) |y| {
-                        for (0..width) |x| {
-                            const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
-                            const col_srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.color(col));
-                            image.pixels.rgb24[y * width + x] = zigimg.color.Rgb24.from.color(col_srgb);
-                        }
-                    }
-
-                    const formated_string = try std.fmt.bufPrint(&file_name_buffer, "camera_{d}.png", .{idx});
-                    try image.writeToFilePath(allocator, formated_string, &image_write_buffer, .{ .png = .{} });
-                }
-            }
-        } else {
-            std.debug.print("Error: Expected path containing a glTF file, found {s}\n", .{gltf_file_path});
+    if (res.args.input) |n| {
+        input_file = n;
+        input_file_extension = std.fs.path.extension(input_file);
+        if (!std.mem.eql(u8, input_file_extension, ".gltf")) {
+            std.debug.print("Invalid input file type '{s}', only '.gltf' file is supported. Make sure path is correct.\n", .{input_file_extension});
+            return;
         }
     } else {
+        std.debug.print("{s}", .{input_file_help_string});
+        return;
+    }
+
+    if (res.args.output) |s| {
+        output_file = s;
+        output_file_extension = std.fs.path.extension(output_file);
+        if (!(std.mem.eql(u8, output_file_extension, ".hdr") or std.mem.eql(u8, output_file_extension, ".png"))) {
+            std.debug.print("Invalid export file type '{s}', only '.hdr' for HDR image and '.png' for SDR image are supported.\n", .{output_file_extension});
+            return;
+        }
+    } else {
+        if (interactive == false) {
+            std.debug.print("{s}", .{output_file_help_string});
+            return;
+        }
+    }
+
+    if (!interactive) {
+        rasterizer.init(input_file) catch |err| {
+            std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
+        };
+        defer rasterizer.deinit();
+
+        var file_name_buffer: [100]u8 = undefined;
+        for (0..rasterizer.scene.cameras.items.len) |idx| {
+            try rasterizer.render(0, idx);
+
+            const formated_string = try std.fmt.bufPrint(&file_name_buffer, "{d}_{s}", .{ idx, output_file });
+            if (std.mem.eql(u8, output_file_extension, ".hdr")) {
+                try Radiance.writeToDisk(formated_string, &rasterizer.opaque_fb);
+            } else if (std.mem.eql(u8, output_file_extension, ".png")) {
+                const width = rasterizer.opaque_fb.width;
+                const height = rasterizer.opaque_fb.height;
+
+                var image_write_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+                var image = try zigimg.Image.create(allocator, width, height, .rgb24);
+                defer image.deinit(allocator);
+
+                for (0..height) |y| {
+                    for (0..width) |x| {
+                        const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
+                        const col_srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.color(col));
+                        image.pixels.rgb24[y * width + x] = zigimg.color.Rgb24.from.color(col_srgb);
+                    }
+                }
+
+                try image.writeToFilePath(allocator, formated_string, &image_write_buffer, .{ .png = .{} });
+            }
+        }
+    } else {
+        interactive_input_file = input_file;
         sapp.run(
             .{
                 .init_cb = init,
@@ -266,3 +322,35 @@ pub fn main() !void {
         );
     }
 }
+
+const help_string =
+    \\ Usage: ZigCPURasterizer [commands] [options]
+    \\
+    \\ Commands:
+    \\     --interactive                          Launch rasterizer in interactive mode.
+    \\
+    \\ Options:
+    \\     -i [GLTF_FILE_PATH].gltf             Input glTF file. Currently only ".glTF" file is supported.
+    \\     -o [IMAGE_FILE_PATH].[hdr/png]       Output Image. Currently only ".hdr" (HDR range) and ".png" (SDR range) file is supported.
+    \\
+;
+
+const input_file_help_string =
+    \\ No input file detected.
+    \\
+    \\ Options:
+    \\     -i [GLTF_FILE_PATH].gltf             Input glTF file. Currently only ".glTF" file is supported.
+    \\
+    \\ Note: CLI arguments parser is pretty dumb. So, do EXACTLY as it says.
+    \\
+;
+
+const output_file_help_string =
+    \\ No output file detected.
+    \\
+    \\ Options:
+    \\     -o [IMAGE_FILE_PATH].[hdr/png]       Output Image. Currently only ".hdr" (HDR range) and ".png" (SDR range) file is supported.
+    \\
+    \\ Note: CLI arguments parser is pretty dumb. So, do EXACTLY as it says.
+    \\
+;

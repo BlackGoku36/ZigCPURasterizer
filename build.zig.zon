@@ -11,4 +11,8 @@
         .url = "git+https://github.com/kooparse/zgltf#ec52d477db346af99d4cdced4e35e67e1670023f",
         .hash = "zgltf-0.1.0-sX6QAt0SAgDzMQCCG-N181hVbx8JnwFYZ3luQigQpVBM",
     },
+    .clap = .{
+        .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.11.0.tar.gz",
+        .hash = "clap-0.11.0-oBajB-HnAQDPCKYzwF7rO3qDFwRcD39Q0DALlTSz5H7e",
+    },
 }, .minimum_zig_version = "0.15.1", .fingerprint = 0x963bce155f96c8a5, .paths = .{ "build.zig", "build.zig.zon", "src" } }
