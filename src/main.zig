@@ -27,13 +27,7 @@ const state = struct {
     var dbg_bind: sg.Bindings = .{};
 };
 
-var interactive_input_file: []const u8 = undefined;
-
 export fn init() void {
-    rasterizer.init(interactive_input_file) catch |err| {
-        std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
-    };
-
     sg.setup(.{
         .environment = sglue.environment(),
         .logger = .{ .func = slog.func },
@@ -304,7 +298,10 @@ pub fn main() !void {
             }
         }
     } else {
-        interactive_input_file = input_file;
+        rasterizer.init(input_file) catch |err| {
+            std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
+        };
+
         sapp.run(
             .{
                 .init_cb = init,

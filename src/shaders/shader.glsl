@@ -22,6 +22,8 @@ out vec4 frag_color;
 
 void main() {
     vec3 col = texture(sampler2D(tex, smp), uv).xyz;
+    col = col / (col + 1.0);
+    col = pow(col, vec3(1.0/2.2));
     frag_color = vec4(col, 1.0);
 }
 @end
