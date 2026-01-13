@@ -321,6 +321,7 @@ pub const Scene = struct {
     materials: std.ArrayList(PBRMaterial),
     lights: std.ArrayList(Light),
     cameras: std.ArrayList(Camera),
+    ambient_light: Vec3,
 
     pub fn fromGLTFFile(fileName: []const u8, allocator: std.mem.Allocator) !Scene {
         const parent_path = std.fs.path.dirname(fileName).?;
@@ -330,6 +331,8 @@ pub const Scene = struct {
         var materials: std.ArrayList(PBRMaterial) = .{};
         var lights: std.ArrayList(Light) = .{};
         var cameras: std.ArrayList(Camera) = .{};
+
+        var ambient_light = Vec3.init(1.0);
 
         const buffer = std.fs.cwd().readFileAllocOptions(allocator, fileName, 5_000_000, null, std.mem.Alignment.@"4", null) catch |err| {
             std.debug.print("Couldn't open glTF's file {s} : {any}\n", .{ fileName, err });
@@ -444,20 +447,19 @@ pub const Scene = struct {
                             }
                         }
                     } else if (node.light) |light_idx| {
-                        // const light_pos = node.translation;
                         const light = gltf.data.lights[light_idx];
                         if (light.type == .directional) {
-                            // const q = Quat{ .c = Vec3{ .x = node.rotation[0], .y = node.rotation[1], .z = node.rotation[2] }, .r = node.rotation[3] };
-                            // const v = Vec3{ .x = 0.0, .y = 0.0, .z = -1.0 };
-                            // const direction = Matrix4.multVec3(Quat.mat4FromQuat(q), v);
-                            // TODO: Try convert the color to linear space by color^2.22
-                            // try lights.append(allocator, Light{
-                            //     .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
-                            //     .pos = direction,
-                            //     .intensity = 0.8, //light.intensity,
-                            //     .range = 10.0, //light.range,
-                            //     .type = .Directional,
-                            // });
+                            const q = Quat{ .c = Vec3{ .x = node.rotation[0], .y = node.rotation[1], .z = node.rotation[2] }, .r = node.rotation[3] };
+                            const v = Vec3{ .x = 0.0, .y = 0.0, .z = -1.0 };
+                            const direction = Matrix4.multVec3Direction(Quat.mat4FromQuat(q), v);
+                            try lights.append(allocator, Light{
+                                .color = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] },
+                                .pos = direction,
+                                .intensity = light.intensity * 0.001,
+                                .range = light.range,
+                                .type = .Directional,
+                            });
+                            ambient_light = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] };
                         } else if (light.type == .point) {
                             std.debug.print("light color: {} {} {}\n", .{ light.color[0], light.color[1], light.color[2] });
                             std.debug.print("light intensity: {}\n", .{light.intensity});
@@ -551,15 +553,16 @@ pub const Scene = struct {
             });
         }
         if (lights.items.len == 0) {
+            const direction = Vec3.normalize(Vec3.init(-1.0));
+            const col = Vec3.init(1.0);
             try lights.append(allocator, Light{
-                .color = Vec3{ .x = 1.0, .y = 1.0, .z = 1.0 },
-                .pos = Vec3{ .x = 1.0, .y = 3.0, .z = 1.0 },
-                // .pos = Vec3.normalize(Vec3.sub(Vec3.init(1.0), Vec3.init(0.0))),
-                .intensity = 50.0, //light.intensity,
-                .range = 10.0, //light.range,
-                // .type = .Directional,
-                .type = .Point,
+                .color = col,
+                .pos = direction,
+                .intensity = 1000.0 * 0.001,
+                .range = 10.0,
+                .type = .Directional,
             });
+            ambient_light = col;
         }
         return Scene{
             .opaque_meshes = opaque_meshes,
@@ -567,6 +570,7 @@ pub const Scene = struct {
             .materials = materials,
             .lights = lights,
             .cameras = cameras,
+            .ambient_light = ambient_light,
         };
     }
 

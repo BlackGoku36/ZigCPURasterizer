@@ -578,9 +578,10 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                                             }
                                         }
 
-                                        // const ambient = Vec3.init(0.03).multv(albedo).multf(ao);
-                                        // var color = Vec3.add(ambient, Lo);
-                                        var color = Lo;
+                                        const ambient_col = (scene.ambient_light).multf(0.025);
+                                        const ambient = ambient_col.multv(albedo).multf(ao);
+                                        var color = Vec3.add(ambient, Lo);
+                                        // var color = Lo;
                                         color = color.add(emissive);
                                         // color = color.divv(color.add(Vec3.init(1.0)));
                                         // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
