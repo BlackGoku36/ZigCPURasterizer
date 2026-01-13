@@ -288,7 +288,10 @@ pub fn main() !void {
 
                 for (0..height) |y| {
                     for (0..width) |x| {
-                        const col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
+                        var col = rasterizer.opaque_fb.getPixel(@intCast(x), @intCast(y));
+                        col.r /= col.r + 1.0;
+                        col.g /= col.g + 1.0;
+                        col.b /= col.b + 1.0;
                         const col_srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.color(col));
                         image.pixels.rgb24[y * width + x] = zigimg.color.Rgb24.from.color(col_srgb);
                     }
