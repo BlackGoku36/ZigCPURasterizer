@@ -341,8 +341,6 @@ const input_file_help_string =
     \\ Options:
     \\     -i [GLTF_FILE_PATH].gltf             Input glTF file. Currently only ".glTF" file is supported.
     \\
-    \\ Note: CLI arguments parser is pretty dumb. So, do EXACTLY as it says.
-    \\
 ;
 
 const output_file_help_string =
@@ -350,7 +348,5 @@ const output_file_help_string =
     \\
     \\ Options:
     \\     -o [IMAGE_FILE_PATH].[hdr/png]       Output Image. Currently only ".hdr" (HDR range) and ".png" (SDR range) file is supported.
-    \\
-    \\ Note: CLI arguments parser is pretty dumb. So, do EXACTLY as it says.
     \\
 ;
