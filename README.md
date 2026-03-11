@@ -46,11 +46,15 @@ Lumberyard Bistro:
 
 ![screenshot2](2_bistro.avif)
 
-[Iron Howl v8](https://sketchfab.com/3d-models/iron-howl-v8-47a361137a3749858d21b2ce8bcbe21e)
+[Iron Howl v8](https://sketchfab.com/3d-models/iron-howl-v8-47a361137a3749858d21b2ce8bcbe21e):
 
 ![screenshot2](0_iron_howl_v8.avif)
 
 ![screenshot2](1_iron_howl_v8.avif)
+
+Damaged Helmet:
+
+![](0_helmet.avif)
 
 ---
 
