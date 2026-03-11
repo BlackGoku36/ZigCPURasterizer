@@ -106,6 +106,9 @@ pub var height: u32 = 0;
 var width_f32: f32 = 0;
 var height_f32: f32 = 0;
 
+var opaque_tri_count: usize = 0;
+var transcluent_tri_count: usize = 0;
+
 pub fn init(gltf_file_path: []const u8) !void {
     scene = try Scene.fromGLTFFile(gltf_file_path, allocator);
 
@@ -371,6 +374,8 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                 var clipped_triangle: [8]Tri = undefined;
                 const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
 
+                opaque_tri_count += count;
+
                 for (clipped_triangle, 0..) |triangle, t_idx| {
                     if (t_idx >= count) break;
 
@@ -612,6 +617,8 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
 
         var clipped_triangle: [8]Tri = undefined;
         const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+
+        var opaque_tri: bool = true;
 
         for (clipped_triangle, 0..) |triangle, t_idx| {
             if (t_idx >= count) break;
@@ -918,7 +925,9 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                         transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
                                         depth_buffer.putPixel(x, y, z);
                                     }
+                                    opaque_tri = false;
                                 } else {
+                                    opaque_tri = true;
                                     opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
                                     depth_buffer.putPixel(x, y, z);
                                 }
@@ -933,6 +942,12 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                     w_y2 += dx2;
                 }
             }
+        }
+
+        if (opaque_tri) {
+            opaque_tri_count += count;
+        } else {
+            transcluent_tri_count += count;
         }
     }
 }
@@ -963,6 +978,9 @@ const TriSortContext = struct {
 
 // TODO: Merge Opaque and Transcluent same frag/vert code
 pub fn render(_: f32, camera: usize) !void {
+    opaque_tri_count = 0;
+    transcluent_tri_count = 0;
+
     opaque_fb.clearColor(0.0);
     transcluent_fb.clearColor(0.0);
     depth_buffer.clearColor(1.0);
@@ -991,6 +1009,9 @@ pub fn render(_: f32, camera: usize) !void {
     try renderTranscluentMeshes(view_projection_mat);
 
     opaque_fb.add(&transcluent_fb);
+
+    std.debug.print("Opaque Tri Count: {d}\n", .{opaque_tri_count});
+    std.debug.print("Transcluent Tri Count: {d}\n", .{transcluent_tri_count});
 }
 
 pub fn deinit() void {
