@@ -2,6 +2,7 @@ const std = @import("std");
 const sokol = @import("sokol");
 const slog = sokol.log;
 const sglue = sokol.glue;
+const stime = sokol.time;
 
 const sg = sokol.gfx;
 const sapp = sokol.app;
@@ -265,6 +266,8 @@ pub fn main() !void {
         }
     }
 
+    stime.setup();
+
     if (!interactive) {
         rasterizer.init(input_file) catch |err| {
             std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
@@ -273,7 +276,11 @@ pub fn main() !void {
 
         var file_name_buffer: [100]u8 = undefined;
         for (0..rasterizer.scene.cameras.items.len) |idx| {
+            const start = stime.now();
             try rasterizer.render(0, idx);
+            const end = stime.now();
+
+            std.debug.print("Time: {d} ms\n", .{stime.ms(end - start)});
 
             const formated_string = try std.fmt.bufPrint(&file_name_buffer, "{d}_{s}", .{ idx, output_file });
             if (std.mem.eql(u8, output_file_extension, ".hdr")) {
