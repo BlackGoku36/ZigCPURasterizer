@@ -390,6 +390,10 @@ pub const Scene = struct {
             try materials.append(allocator, pbr_material);
         }
 
+        var area_light_count: u32 = 0;
+        var point_light_count: u32 = 0;
+        var directional_light_count: u32 = 0;
+
         for (gltf.data.scenes) |scene| {
             if (scene.nodes) |root_nodes| {
                 for (root_nodes) |root_node| {
@@ -444,6 +448,8 @@ pub const Scene = struct {
                                     .type = .Area,
                                     .verts = [4]Vec3{ area_vert1, area_vert2, area_vert3, area_vert4 },
                                 });
+
+                                area_light_count += 1;
                             }
                         }
                     } else if (node.light) |light_idx| {
@@ -460,6 +466,7 @@ pub const Scene = struct {
                                 .type = .Directional,
                             });
                             ambient_light = Vec3{ .x = light.color[0], .y = light.color[1], .z = light.color[2] };
+                            directional_light_count += 1;
                         } else if (light.type == .point) {
                             std.debug.print("light color: {} {} {}\n", .{ light.color[0], light.color[1], light.color[2] });
                             std.debug.print("light intensity: {}\n", .{light.intensity});
@@ -475,6 +482,7 @@ pub const Scene = struct {
                                 .range = light.range,
                                 .type = .Point,
                             });
+                            point_light_count += 1;
                         } else {
                             std.debug.print("TODO: Spot Light not supported!\n", .{});
                         }
@@ -563,7 +571,11 @@ pub const Scene = struct {
                 .type = .Directional,
             });
             ambient_light = col;
+            directional_light_count += 1;
         }
+        std.debug.print("Area Light Count: {d}\n", .{area_light_count});
+        std.debug.print("Point Light Count: {d}\n", .{point_light_count});
+        std.debug.print("Directional Light Count: {d}\n", .{directional_light_count});
         return Scene{
             .opaque_meshes = opaque_meshes,
             .translucent_meshes = translucent_meshes,
