@@ -2,6 +2,7 @@ const std = @import("std");
 const Vec4 = @import("../math/vec4.zig").Vec4;
 const Vec3 = @import("../math/vec3.zig").Vec3;
 const Vec2 = @import("../math/vec2.zig").Vec2;
+const Matrix4 = @import("../math/matrix4.zig").Matrix4;
 
 const ClippingPlane = enum(u8) { NEAR, FAR, LEFT, RIGHT, TOP, BOTTOM };
 
@@ -68,6 +69,7 @@ pub const Tri = struct {
             tri_out[i].v0 = polygon_in.vertices[0];
             tri_out[i].v1 = polygon_in.vertices[i + 1];
             tri_out[i].v2 = polygon_in.vertices[i + 2];
+            tri_out[i].material_idx = tri_in.material_idx;
         }
         return tri_count;
     }
@@ -160,6 +162,93 @@ fn clipPolygonAgainstAllPlane(polygon_in: *Polygon) u8 {
     @memcpy(polygon_in.vertices[0..], input.*.vertices[0..]);
     polygon_in.count = input.*.count;
     return polygon_in.count;
+}
+
+pub const BoundingSphere = struct { center: Vec3, radius: f32 };
+pub fn getBoundingSphere(vertices: []f32, vertices_len: usize, transform: Matrix4) BoundingSphere {
+    var min_vertex = Vec3{ .x = vertices[0], .y = vertices[1], .z = vertices[2] };
+    min_vertex = Matrix4.multVec3Point(transform, min_vertex);
+    var max_vertex = Vec3{ .x = vertices[0], .y = vertices[1], .z = vertices[2] };
+    max_vertex = Matrix4.multVec3Point(transform, max_vertex);
+
+    var index: usize = 3;
+    while (index < vertices_len) : (index += 3) {
+        var vertex = Vec3{ .x = vertices[index], .y = vertices[index + 1], .z = vertices[index + 2] };
+        vertex = Matrix4.multVec3Point(transform, vertex);
+
+        min_vertex.x = @min(min_vertex.x, vertex.x);
+        min_vertex.y = @min(min_vertex.y, vertex.y);
+        min_vertex.z = @min(min_vertex.z, vertex.z);
+
+        max_vertex.x = @max(max_vertex.x, vertex.x);
+        max_vertex.y = @max(max_vertex.y, vertex.y);
+        max_vertex.z = @max(max_vertex.z, vertex.z);
+    }
+
+    const center = Vec3.add(max_vertex, min_vertex).multf(0.5);
+
+    var max_radius: f32 = 0.0;
+    index = 0;
+    while (index < vertices_len) : (index += 3) {
+        var vertex = Vec3{ .x = vertices[index], .y = vertices[index + 1], .z = vertices[index + 2] };
+        vertex = Matrix4.multVec3Point(transform, vertex);
+
+        const dist = vertex.sub(center);
+        const dist_sq = Vec3.dot(dist, dist);
+        max_radius = @max(max_radius, dist_sq);
+    }
+
+    return BoundingSphere{
+        .center = center,
+        .radius = @sqrt(max_radius),
+    };
+}
+
+pub const FrustrumCullResult = enum { inside, outside, on_plane };
+
+pub fn getFrustrumCullingPlanes(mvp: Matrix4) [6]Vec4 {
+    var frustrum_planes: [6]Vec4 = [_]Vec4{
+        Vec4.add(mvp.row3(), mvp.row0()), // Left
+        Vec4.sub(mvp.row3(), mvp.row0()), // Right
+        Vec4.add(mvp.row3(), mvp.row1()), // Bottom
+        Vec4.sub(mvp.row3(), mvp.row1()), // Top
+        Vec4.add(mvp.row3(), mvp.row2()), // Near
+        Vec4.sub(mvp.row3(), mvp.row2()), // Far
+    };
+
+    for (&frustrum_planes) |*planes| {
+        const plane_normal = planes.*.toVec3();
+        const len = plane_normal.getLength();
+        std.debug.assert(len != 0.0);
+        planes.*.x = planes.*.x / len;
+        planes.*.y = planes.*.y / len;
+        planes.*.z = planes.*.z / len;
+        planes.*.w = planes.*.w / len;
+    }
+
+    return frustrum_planes;
+}
+
+pub fn frustrumCullingSphere(frustrum_planes: [6]Vec4, sphere_pos: Vec3, sphere_radius: f32) FrustrumCullResult {
+    var count: u8 = 0;
+    for (frustrum_planes) |plane| {
+        const plane_normal = plane.toVec3();
+        const distance = plane_normal.dot(sphere_pos) + plane.w;
+
+        if (distance <= -sphere_radius) {
+            return .outside;
+        }
+
+        if (distance > sphere_radius) {
+            count += 1;
+        }
+    }
+
+    if (count == 6) {
+        return .inside;
+    } else {
+        return .on_plane;
+    }
 }
 
 pub fn calculateFaceNormals(pos1: Vec3, pos2: Vec3, pos3: Vec3) Vec3 {

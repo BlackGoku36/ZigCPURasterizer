@@ -82,6 +82,22 @@ pub const Matrix4 = struct {
         return Matrix4{ .mat = out_mat };
     }
 
+    pub fn row0(mat: Matrix4) Vec4 {
+        return Vec4{ .x = mat.mat[0], .y = mat.mat[1], .z = mat.mat[2], .w = mat.mat[3] };
+    }
+
+    pub fn row1(mat: Matrix4) Vec4 {
+        return Vec4{ .x = mat.mat[4], .y = mat.mat[5], .z = mat.mat[6], .w = mat.mat[7] };
+    }
+
+    pub fn row2(mat: Matrix4) Vec4 {
+        return Vec4{ .x = mat.mat[8], .y = mat.mat[9], .z = mat.mat[10], .w = mat.mat[11] };
+    }
+
+    pub fn row3(mat: Matrix4) Vec4 {
+        return Vec4{ .x = mat.mat[12], .y = mat.mat[13], .z = mat.mat[14], .w = mat.mat[15] };
+    }
+
     pub fn multMatrix4(a: Matrix4, b: Matrix4) Matrix4 {
         var out_mat = comptime getZero();
 

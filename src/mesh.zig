@@ -26,6 +26,7 @@ pub const Mesh = struct {
     material: ?usize,
     winding_order: WindingOrder = .CCW,
     should_render: bool = true,
+    bounding_sphere: geometry.BoundingSphere,
 };
 
 pub const LightType = enum {
@@ -162,6 +163,8 @@ pub fn getMeshFromNode(
             tangents = try geometry.calculateTangents(allocator, vertices, uvs[0], indices_32);
         }
 
+        const bounding_sphere = geometry.getBoundingSphere(vertices, vertices.len, transform);
+
         const material = gltf.data.materials[p.material.?];
         if (material.transmission_factor > 0.0 or material.transmission_texture != null or material.alpha_mode == .blend) {
             try transcluent_meshes.append(allocator, Mesh{
@@ -175,6 +178,7 @@ pub fn getMeshFromNode(
                 .transform = transform,
                 .material = p.material,
                 .winding_order = winding_order,
+                .bounding_sphere = bounding_sphere,
             });
         } else {
             try opaque_meshes.append(allocator, Mesh{
@@ -188,6 +192,7 @@ pub fn getMeshFromNode(
                 .transform = transform,
                 .material = p.material,
                 .winding_order = winding_order,
+                .bounding_sphere = bounding_sphere,
             });
         }
     }
