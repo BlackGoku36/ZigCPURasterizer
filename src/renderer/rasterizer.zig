@@ -140,13 +140,20 @@ pub fn init(gltf_file_path: []const u8) !void {
         const adjusted_xmag = c.ymag * c.aspect_ratio;
         projection_mat = Matrix4.orthogonalProjection(-adjusted_xmag, adjusted_xmag, c.ymag, -c.ymag, 0.1, 1000.0);
     }
+    try tris.ensureTotalCapacity(allocator, 30_000);
 }
 
 pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
     tris.clearRetainingCapacity();
+    const frustrum_planes = geometry.getFrustrumCullingPlanes(vp_matrix);
 
     for (meshes.items) |mesh| {
         if (!mesh.should_render) continue;
+
+        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_sphere.center, mesh.bounding_sphere.radius);
+        if (culling_result == .outside) {
+            continue;
+        }
 
         const model_mat = mesh.transform;
         const model_view_projection_mat = Matrix4.multMatrix4(vp_matrix, model_mat);
@@ -253,12 +260,25 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
             tri.material_idx = @intCast(mesh.material.?);
 
-            try tris.append(allocator, tri);
+            var clipped_triangle: [8]Tri = undefined;
+            var count: u8 = 1;
+            clipped_triangle[0] = tri;
+
+            if (culling_result == .on_plane) {
+                count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+            }
+
+            for (clipped_triangle, 0..) |triangle, t_idx| {
+                if (t_idx >= count) break;
+                try tris.append(allocator, triangle);
+            }
         }
     }
 }
 
 pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
+    const frustrum_planes = geometry.getFrustrumCullingPlanes(view_projection_mat);
+
     for (scene.opaque_meshes.items) |mesh| {
         if (!mesh.should_render) continue;
 
@@ -266,6 +286,13 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
         // _ = theta;
         const model_mat = mesh.transform;
 
+        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_sphere.center, mesh.bounding_sphere.radius);
+        if (culling_result == .outside) {
+            continue;
+        }
+
+        // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
+        // _ = theta;
         const model_view_projection_mat = Matrix4.multMatrix4(view_projection_mat, model_mat);
 
         var indices_len: usize = 0;
@@ -372,7 +399,12 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
 
             if (Vec3.dot(newNorm1, Vec3.normalize(Vec3.sub(camera_pos, Matrix4.multVec3Point(model_mat, vert1)))) > -0.25) {
                 var clipped_triangle: [8]Tri = undefined;
-                const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+                var count: u8 = 1;
+                clipped_triangle[0] = tri;
+
+                if (culling_result == .on_plane) {
+                    count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+                }
 
                 opaque_tri_count += count;
 
@@ -615,339 +647,339 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
     for (tris.items) |tri| {
         const active_material = scene.materials.items[tri.material_idx];
 
-        var clipped_triangle: [8]Tri = undefined;
-        const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+        // var clipped_triangle: [8]Tri = undefined;
+        // const count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
 
         var opaque_tri: bool = true;
 
-        for (clipped_triangle, 0..) |triangle, t_idx| {
-            if (t_idx >= count) break;
+        // for (clipped_triangle, 0..) |triangle, t_idx| {
+        // if (t_idx >= count) break;
 
-            const new_tri = Tri.clipToNDC(triangle);
+        const new_tri = Tri.clipToNDC(tri);
 
-            const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
-            const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
-            const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
+        const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
+        const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
+        const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
 
-            if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
-                const area = edgeFunction(a, b, c.x, c.y);
+        if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
+            const area = edgeFunction(a, b, c.x, c.y);
 
-                const xf32 = @as(f32, @floatFromInt(aabb.min_x));
-                const yf32 = @as(f32, @floatFromInt(aabb.min_y));
+            const xf32 = @as(f32, @floatFromInt(aabb.min_x));
+            const yf32 = @as(f32, @floatFromInt(aabb.min_y));
 
-                var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
-                var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
-                var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
+            var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
+            var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
+            var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
 
-                const dy0 = (b.y - a.y);
-                const dy1 = (c.y - b.y);
-                const dy2 = (a.y - c.y);
+            const dy0 = (b.y - a.y);
+            const dy1 = (c.y - b.y);
+            const dy2 = (a.y - c.y);
 
-                const dx0 = (a.x - b.x);
-                const dx1 = (b.x - c.x);
-                const dx2 = (c.x - a.x);
+            const dx0 = (a.x - b.x);
+            const dx1 = (b.x - c.x);
+            const dx2 = (c.x - a.x);
 
-                var y: u32 = aabb.min_y;
-                while (y <= aabb.max_y) : (y += 1) {
-                    var x: u32 = aabb.min_x;
+            var y: u32 = aabb.min_y;
+            while (y <= aabb.max_y) : (y += 1) {
+                var x: u32 = aabb.min_x;
 
-                    var w_x0: f32 = w_y0;
-                    var w_x1: f32 = w_y1;
-                    var w_x2: f32 = w_y2;
+                var w_x0: f32 = w_y0;
+                var w_x1: f32 = w_y1;
+                var w_x2: f32 = w_y2;
 
-                    while (x <= aabb.max_x) : (x += 1) {
-                        if (windingOrderNone(w_x0, w_x1, w_x2)) {
-                            const area0 = w_x0 / area;
-                            const area1 = w_x1 / area;
-                            const area2 = w_x2 / area;
+                while (x <= aabb.max_x) : (x += 1) {
+                    if (windingOrderNone(w_x0, w_x1, w_x2)) {
+                        const area0 = w_x0 / area;
+                        const area1 = w_x1 / area;
+                        const area2 = w_x2 / area;
 
-                            const z = (area1 * new_tri.v0.position.z + area2 * new_tri.v1.position.z + area0 * new_tri.v2.position.z);
+                        const z = (area1 * new_tri.v0.position.z + area2 * new_tri.v1.position.z + area0 * new_tri.v2.position.z);
 
-                            if (z < depth_buffer.getPixel(x, y)) {
-                                const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
-                                const w: f32 = 1 / one_over_w;
+                        if (z < depth_buffer.getPixel(x, y)) {
+                            const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
+                            const w: f32 = 1 / one_over_w;
 
-                                const norx = area1 * new_tri.v0.normal.x + area2 * new_tri.v1.normal.x + area0 * new_tri.v2.normal.x;
-                                const nory = area1 * new_tri.v0.normal.y + area2 * new_tri.v1.normal.y + area0 * new_tri.v2.normal.y;
-                                const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
-                                const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
+                            const norx = area1 * new_tri.v0.normal.x + area2 * new_tri.v1.normal.x + area0 * new_tri.v2.normal.x;
+                            const nory = area1 * new_tri.v0.normal.y + area2 * new_tri.v1.normal.y + area0 * new_tri.v2.normal.y;
+                            const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
+                            const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
 
-                                var albedo: Vec3 = Vec3.init(0.0);
-                                var normal: Vec3 = Vec3.init(0.0);
-                                var metallic: f32 = 0.0;
-                                var roughness: f32 = 0.0;
-                                // const ao: f32 = 0.1;
+                            var albedo: Vec3 = Vec3.init(0.0);
+                            var normal: Vec3 = Vec3.init(0.0);
+                            var metallic: f32 = 0.0;
+                            var roughness: f32 = 0.0;
+                            // const ao: f32 = 0.1;
 
-                                var emissive: Vec3 = Vec3.init(0.0);
+                            var emissive: Vec3 = Vec3.init(0.0);
 
-                                var transmission: f16 = 0.0;
-                                var ior: f16 = 1.5;
+                            var transmission: f16 = 0.0;
+                            var ior: f16 = 1.5;
 
-                                if (active_material.type == .Textured) {
-                                    var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
-                                    var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
+                            if (active_material.type == .Textured) {
+                                var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
+                                var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
 
-                                    u *= w;
-                                    v *= w;
+                                u *= w;
+                                v *= w;
 
-                                    u = @mod(u, 1.0);
-                                    v = @mod(v, 1.0);
+                                u = @mod(u, 1.0);
+                                v = @mod(v, 1.0);
 
-                                    const tex_uv = Vec2{ .x = u, .y = v };
+                                const tex_uv = Vec2{ .x = u, .y = v };
 
-                                    const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
-                                    const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
-                                    const tangentz = area1 * new_tri.v0.tangent.z + area2 * new_tri.v1.tangent.z + area0 * new_tri.v2.tangent.z;
-                                    const tangent = Vec3.normalize(Vec3{ .x = tangentx * w, .y = tangenty * w, .z = tangentz * w });
+                                const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
+                                const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
+                                const tangentz = area1 * new_tri.v0.tangent.z + area2 * new_tri.v1.tangent.z + area0 * new_tri.v2.tangent.z;
+                                const tangent = Vec3.normalize(Vec3{ .x = tangentx * w, .y = tangenty * w, .z = tangentz * w });
 
-                                    const bitangentx = area1 * new_tri.v0.bitangent.x + area2 * new_tri.v1.bitangent.x + area0 * new_tri.v2.bitangent.x;
-                                    const bitangenty = area1 * new_tri.v0.bitangent.y + area2 * new_tri.v1.bitangent.y + area0 * new_tri.v2.bitangent.y;
-                                    const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
-                                    const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
+                                const bitangentx = area1 * new_tri.v0.bitangent.x + area2 * new_tri.v1.bitangent.x + area0 * new_tri.v2.bitangent.x;
+                                const bitangenty = area1 * new_tri.v0.bitangent.y + area2 * new_tri.v1.bitangent.y + area0 * new_tri.v2.bitangent.y;
+                                const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
+                                const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
 
-                                    const pbr = shaders.pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
-                                    // if (pbr.albedo.w < 0.1) {
-                                    // continue;
-                                    // }
+                                const pbr = shaders.pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
+                                // if (pbr.albedo.w < 0.1) {
+                                // continue;
+                                // }
 
-                                    albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
+                                albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
 
-                                    var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
-                                    normal_map = Vec3.normalize(normal_map);
+                                var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
+                                normal_map = Vec3.normalize(normal_map);
 
-                                    metallic = @floatCast(pbr.metallic);
-                                    roughness = @floatCast(pbr.roughness);
-                                    // ao = @floatCast(pbr.ao);
-                                    emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
+                                metallic = @floatCast(pbr.metallic);
+                                roughness = @floatCast(pbr.roughness);
+                                // ao = @floatCast(pbr.ao);
+                                emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
 
-                                    normal = frag_normal;
-                                    if (active_material.pbr_texture.?.normal) {
-                                        normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
-                                        normal = Vec3.normalize(normal);
-                                    }
-                                    transmission = pbr.transmission;
-                                    ior = pbr.ior;
-                                } else {
-                                    const pbr_solid = active_material.pbr_solid.?;
-                                    albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
-                                    normal = frag_normal;
-                                    metallic = @floatCast(pbr_solid.metallic);
-                                    roughness = @floatCast(pbr_solid.roughness);
-                                    // ao = @floatCast(pbr_solid.ao);
-
-                                    emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
-                                    transmission = pbr_solid.transmission;
-                                    ior = pbr_solid.ior;
+                                normal = frag_normal;
+                                if (active_material.pbr_texture.?.normal) {
+                                    normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
+                                    normal = Vec3.normalize(normal);
                                 }
+                                transmission = pbr.transmission;
+                                ior = pbr.ior;
+                            } else {
+                                const pbr_solid = active_material.pbr_solid.?;
+                                albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
+                                normal = frag_normal;
+                                metallic = @floatCast(pbr_solid.metallic);
+                                roughness = @floatCast(pbr_solid.roughness);
+                                // ao = @floatCast(pbr_solid.ao);
 
-                                const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
-                                const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
-                                const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
-                                const world = Vec3{ .x = worldx * w, .y = worldy * w, .z = worldz * w };
+                                emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
+                                transmission = pbr_solid.transmission;
+                                ior = pbr_solid.ior;
+                            }
 
-                                const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
+                            const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
+                            const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
+                            const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
+                            const world = Vec3{ .x = worldx * w, .y = worldy * w, .z = worldz * w };
 
-                                var Lo: Vec3 = Vec3.init(0.0);
+                            const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
 
-                                // var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
-                                var f0 = Vec3.init(std.math.pow(f32, (ior - 1.0) / (ior + 1.0), 2.0));
-                                f0 = Vec3.lerp(f0, albedo, metallic);
+                            var Lo: Vec3 = Vec3.init(0.0);
 
-                                const eta = 1.0 / ior;
-                                //TODO: Improve this refraction code?
-                                const r = Vec3.normalize(Vec3.refract(view_dir.multf(-1.0), normal, eta));
-                                // const thickness = 0.0;
-                                const thickness = @abs(depth_buffer.getPixel(x, y) - z);
-                                // TODO: it vec3 direction right?
-                                const new_r = Matrix4.multVec3Direction(view_projection_mat, r);
+                            // var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
+                            var f0 = Vec3.init(std.math.pow(f32, (ior - 1.0) / (ior + 1.0), 2.0));
+                            f0 = Vec3.lerp(f0, albedo, metallic);
 
-                                var uv_offset = Vec2{ .x = new_r.x * thickness, .y = new_r.y * thickness };
+                            const eta = 1.0 / ior;
+                            //TODO: Improve this refraction code?
+                            const r = Vec3.normalize(Vec3.refract(view_dir.multf(-1.0), normal, eta));
+                            // const thickness = 0.0;
+                            const thickness = @abs(depth_buffer.getPixel(x, y) - z);
+                            // TODO: it vec3 direction right?
+                            const new_r = Matrix4.multVec3Direction(view_projection_mat, r);
 
-                                // We clamp because int part of float overflows.
-                                // We make sure the offset doesn't go outside opaque fb's bounds
-                                uv_offset.x = std.math.clamp(uv_offset.x, 0.0, 1.0);
-                                uv_offset.y = std.math.clamp(uv_offset.y, 0.0, 1.0);
+                            var uv_offset = Vec2{ .x = new_r.x * thickness, .y = new_r.y * thickness };
 
-                                uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
-                                uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
+                            // We clamp because int part of float overflows.
+                            // We make sure the offset doesn't go outside opaque fb's bounds
+                            uv_offset.x = std.math.clamp(uv_offset.x, 0.0, 1.0);
+                            uv_offset.y = std.math.clamp(uv_offset.y, 0.0, 1.0);
 
-                                const uv_offset_i_x = @as(u32, @intFromFloat(uv_offset.x));
-                                const uv_offset_i_y = @as(u32, @intFromFloat(uv_offset.y));
+                            uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
+                            uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
 
-                                const sample_pos_x = std.math.clamp(x + uv_offset_i_x, 0, opaque_fb.width - 1);
-                                const sample_pos_y = std.math.clamp(y + uv_offset_i_y, 0, opaque_fb.height - 1);
+                            const uv_offset_i_x = @as(u32, @intFromFloat(uv_offset.x));
+                            const uv_offset_i_y = @as(u32, @intFromFloat(uv_offset.y));
 
-                                const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
+                            const sample_pos_x = std.math.clamp(x + uv_offset_i_x, 0, opaque_fb.width - 1);
+                            const sample_pos_y = std.math.clamp(y + uv_offset_i_y, 0, opaque_fb.height - 1);
 
-                                // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
-                                // const linear = zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b);
-                                const bg_color = Vec3{ .x = bg.r, .y = bg.g, .z = bg.b };
+                            const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
 
-                                for (scene.lights.items) |light| {
-                                    if (light.type == .Area) {
-                                        const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
+                            // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
+                            // const linear = zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b);
+                            const bg_color = Vec3{ .x = bg.r, .y = bg.g, .z = bg.b };
 
-                                        var uv = Vec2{ .x = roughness, .y = @sqrt(1.0 - dotNV) };
-                                        uv = uv.multf(shaders.lut_scale).add(Vec2{ .x = shaders.lut_bias, .y = shaders.lut_bias });
+                            for (scene.lights.items) |light| {
+                                if (light.type == .Area) {
+                                    const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
 
-                                        const t1 = shaders.bilinearClampSample(LTC1, uv);
-                                        const t2 = shaders.bilinearClampSample(LTC2, uv);
+                                    var uv = Vec2{ .x = roughness, .y = @sqrt(1.0 - dotNV) };
+                                    uv = uv.multf(shaders.lut_scale).add(Vec2{ .x = shaders.lut_bias, .y = shaders.lut_bias });
 
-                                        const mInv = Matrix4.fromVec3(
-                                            Vec3{ .x = t1.x, .y = 0.0, .z = t1.y },
-                                            Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 },
-                                            Vec3{ .x = t1.z, .y = 0.0, .z = t1.w },
-                                        );
+                                    const t1 = shaders.bilinearClampSample(LTC1, uv);
+                                    const t2 = shaders.bilinearClampSample(LTC2, uv);
 
-                                        var verts: [4]Vec3 = undefined;
-                                        // verts[0] = Matrix4.multVec3(rot_mat, light.verts.?[0]);
-                                        // verts[1] = Matrix4.multVec3(rot_mat, light.verts.?[1]);
-                                        // verts[2] = Matrix4.multVec3(rot_mat, light.verts.?[2]);
-                                        // verts[3] = Matrix4.multVec3(rot_mat, light.verts.?[3]);
-                                        verts[0] = light.verts.?[0];
-                                        verts[1] = light.verts.?[1];
-                                        verts[2] = light.verts.?[2];
-                                        verts[3] = light.verts.?[3];
+                                    const mInv = Matrix4.fromVec3(
+                                        Vec3{ .x = t1.x, .y = 0.0, .z = t1.y },
+                                        Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 },
+                                        Vec3{ .x = t1.z, .y = 0.0, .z = t1.w },
+                                    );
 
-                                        const diffuse = shaders.areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
-                                        var specular = shaders.areaLightContribution(normal, view_dir, world, mInv, verts);
-                                        const transmitted = shaders.areaLightContribution(normal.multf(-1.0), view_dir, world, Matrix4.getIdentity(), verts);
+                                    var verts: [4]Vec3 = undefined;
+                                    // verts[0] = Matrix4.multVec3(rot_mat, light.verts.?[0]);
+                                    // verts[1] = Matrix4.multVec3(rot_mat, light.verts.?[1]);
+                                    // verts[2] = Matrix4.multVec3(rot_mat, light.verts.?[2]);
+                                    // verts[3] = Matrix4.multVec3(rot_mat, light.verts.?[3]);
+                                    verts[0] = light.verts.?[0];
+                                    verts[1] = light.verts.?[1];
+                                    verts[2] = light.verts.?[2];
+                                    verts[3] = light.verts.?[3];
 
-                                        const fresnel = Vec3{
-                                            .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
-                                            .y = f0.y * t2.x + (1.0 - f0.y) * t2.y,
-                                            .z = f0.z * t2.x + (1.0 - f0.z) * t2.y,
-                                        };
+                                    const diffuse = shaders.areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
+                                    var specular = shaders.areaLightContribution(normal, view_dir, world, mInv, verts);
+                                    const transmitted = shaders.areaLightContribution(normal.multf(-1.0), view_dir, world, Matrix4.getIdentity(), verts);
 
-                                        specular = specular.multv(fresnel);
-                                        const kD = Vec3.init(1.0 - metallic);
+                                    const fresnel = Vec3{
+                                        .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
+                                        .y = f0.y * t2.x + (1.0 - f0.y) * t2.y,
+                                        .z = f0.z * t2.x + (1.0 - f0.z) * t2.y,
+                                    };
 
-                                        const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
-                                        const l_transmitted = kD.multv(albedo.multv(bg_color).multv(transmitted));
-                                        const radiance = light.color;
+                                    specular = specular.multv(fresnel);
+                                    const kD = Vec3.init(1.0 - metallic);
 
-                                        // const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
+                                    const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
+                                    const l_transmitted = kD.multv(albedo.multv(bg_color).multv(transmitted));
+                                    const radiance = light.color;
 
-                                        const front = Vec3.add(specular, l_diffuse).multv(radiance).multf(1.0 - transmission);
-                                        const back = Vec3.add(specular, l_transmitted).multv(radiance).multf(transmission);
+                                    // const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
 
-                                        Lo = Lo.add(front.add(back));
-                                    } else {
-                                        var light_dir: Vec3 = Vec3.init(0.0);
-                                        var radiance: Vec3 = Vec3.init(0.0);
-                                        if (light.type == .Directional) {
-                                            light_dir = Vec3.normalize(light.pos);
-                                            light_dir = Vec3.multf(light_dir, -1.0);
-                                            radiance = light.color.multf(light.intensity);
-                                        } else if (light.type == .Point) {
-                                            light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
-                                            const distance = Vec3.getLength(Vec3.sub(light.pos, world));
-                                            const attenuation = 1.0 / (distance * distance + 1.0);
+                                    const front = Vec3.add(specular, l_diffuse).multv(radiance).multf(1.0 - transmission);
+                                    const back = Vec3.add(specular, l_transmitted).multv(radiance).multf(transmission);
 
-                                            radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
-                                        }
-                                        const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
-
-                                        const fresnel: Vec3 = shaders.fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
-
-                                        const normal_distr: f32 = shaders.normalDistributionGGX(normal, half_vec, roughness);
-                                        const geometryS: f32 = shaders.geometrySmith(normal, view_dir, light_dir, roughness);
-
-                                        const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
-                                        const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
-                                        const specular: Vec3 = numerator.multf(1 / denominator);
-
-                                        const kS: Vec3 = fresnel;
-                                        var kD: Vec3 = Vec3.init(1.0).sub(kS);
-
-                                        kD = kD.multf(1.0 - metallic);
-
-                                        const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
-
-                                        const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
-
-                                        const Lo2 = Vec3.add(Lo1, specular);
-                                        // Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
-                                        const opaque_result = Vec3.multv(Lo2, radiance).multf(NdotL);
-
-                                        const one_minus_fresnel = Vec3.init(1.0).sub(fresnel);
-
-                                        const kT = one_minus_fresnel.multf(1.0 - metallic);
-
-                                        // const eta = 1.0 / ior;
-                                        // const r = Vec3.refract(view_dir.multf(-1.0), normal, eta);
-                                        // const thickness = 1.0;
-
-                                        // const new_r = Matrix4.multVec3(view_mat, r);
-
-                                        // var uv_offset = Vec2{ .x = r.x * thickness, .y = r.y * thickness };
-                                        // uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
-                                        // uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
-
-                                        // const sample_pos_x = std.math.clamp(x + @as(u32, @intFromFloat(uv_offset.x)), 0, opaque_fb.width);
-                                        // const sample_pos_y = std.math.clamp(y + @as(u32, @intFromFloat(uv_offset.y)), 0, opaque_fb.height);
-
-                                        // const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
-                                        // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
-                                        // const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
-                                        const transmitted = kT.multv(bg_color.multv(albedo)).multf(transmission);
-
-                                        const NdotL_Back: f32 = @max(Vec3.dot(normal, light_dir.multf(-1.0)), 0.0);
-
-                                        const transmissive_specular = specular.multv(radiance).multf(NdotL);
-                                        const transmissive_refraction = transmitted.multv(radiance).multf(NdotL_Back);
-
-                                        const transmissive_result = transmissive_specular.add(transmissive_refraction);
-                                        // const l_transmission = one_minus_fresnel.multv(bg_color.multv(albedo)).multf(transmission).multv(radiance).multf(NdotL_Back);
-
-                                        const mix = Vec3.lerp(opaque_result, transmissive_result, transmission);
-                                        Lo = Lo.add(mix);
-                                    }
-                                }
-
-                                var color = Lo;
-                                color = color.add(emissive);
-
-                                if (transmission > 0.0) {
-                                    if (active_material.blend) {
-                                        const prev_color = opaque_fb.getPixel(x, y);
-                                        const blend_factor: f16 = transmission;
-                                        const blend = Color{
-                                            .r = @as(f16, @floatCast(color.x)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
-                                            .g = @as(f16, @floatCast(color.y)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
-                                            .b = @as(f16, @floatCast(color.z)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
-                                        };
-
-                                        transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
-                                        opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
-                                        depth_buffer.putPixel(x, y, z);
-                                    } else {
-                                        transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
-                                        depth_buffer.putPixel(x, y, z);
-                                    }
-                                    opaque_tri = false;
+                                    Lo = Lo.add(front.add(back));
                                 } else {
-                                    opaque_tri = true;
-                                    opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
-                                    depth_buffer.putPixel(x, y, z);
+                                    var light_dir: Vec3 = Vec3.init(0.0);
+                                    var radiance: Vec3 = Vec3.init(0.0);
+                                    if (light.type == .Directional) {
+                                        light_dir = Vec3.normalize(light.pos);
+                                        light_dir = Vec3.multf(light_dir, -1.0);
+                                        radiance = light.color.multf(light.intensity);
+                                    } else if (light.type == .Point) {
+                                        light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
+                                        const distance = Vec3.getLength(Vec3.sub(light.pos, world));
+                                        const attenuation = 1.0 / (distance * distance + 1.0);
+
+                                        radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
+                                    }
+                                    const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
+
+                                    const fresnel: Vec3 = shaders.fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
+
+                                    const normal_distr: f32 = shaders.normalDistributionGGX(normal, half_vec, roughness);
+                                    const geometryS: f32 = shaders.geometrySmith(normal, view_dir, light_dir, roughness);
+
+                                    const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
+                                    const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
+                                    const specular: Vec3 = numerator.multf(1 / denominator);
+
+                                    const kS: Vec3 = fresnel;
+                                    var kD: Vec3 = Vec3.init(1.0).sub(kS);
+
+                                    kD = kD.multf(1.0 - metallic);
+
+                                    const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+
+                                    const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
+
+                                    const Lo2 = Vec3.add(Lo1, specular);
+                                    // Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
+                                    const opaque_result = Vec3.multv(Lo2, radiance).multf(NdotL);
+
+                                    const one_minus_fresnel = Vec3.init(1.0).sub(fresnel);
+
+                                    const kT = one_minus_fresnel.multf(1.0 - metallic);
+
+                                    // const eta = 1.0 / ior;
+                                    // const r = Vec3.refract(view_dir.multf(-1.0), normal, eta);
+                                    // const thickness = 1.0;
+
+                                    // const new_r = Matrix4.multVec3(view_mat, r);
+
+                                    // var uv_offset = Vec2{ .x = r.x * thickness, .y = r.y * thickness };
+                                    // uv_offset.x = uv_offset.x * @as(f32, @floatFromInt(opaque_fb.width));
+                                    // uv_offset.y = uv_offset.y * @as(f32, @floatFromInt(opaque_fb.height));
+
+                                    // const sample_pos_x = std.math.clamp(x + @as(u32, @intFromFloat(uv_offset.x)), 0, opaque_fb.width);
+                                    // const sample_pos_y = std.math.clamp(y + @as(u32, @intFromFloat(uv_offset.y)), 0, opaque_fb.height);
+
+                                    // const bg = opaque_fb.getPixel(sample_pos_x, sample_pos_y);
+                                    // const linear = zigimg.color.sRGB.toLinear(zigimg.color.Colorf32.from.rgb(bg.r, bg.g, bg.b));
+                                    // const bg_color = Vec3{ .x = linear.r, .y = linear.g, .z = linear.b };
+                                    const transmitted = kT.multv(bg_color.multv(albedo)).multf(transmission);
+
+                                    const NdotL_Back: f32 = @max(Vec3.dot(normal, light_dir.multf(-1.0)), 0.0);
+
+                                    const transmissive_specular = specular.multv(radiance).multf(NdotL);
+                                    const transmissive_refraction = transmitted.multv(radiance).multf(NdotL_Back);
+
+                                    const transmissive_result = transmissive_specular.add(transmissive_refraction);
+                                    // const l_transmission = one_minus_fresnel.multv(bg_color.multv(albedo)).multf(transmission).multv(radiance).multf(NdotL_Back);
+
+                                    const mix = Vec3.lerp(opaque_result, transmissive_result, transmission);
+                                    Lo = Lo.add(mix);
                                 }
                             }
+
+                            var color = Lo;
+                            color = color.add(emissive);
+
+                            if (transmission > 0.0) {
+                                if (active_material.blend) {
+                                    const prev_color = opaque_fb.getPixel(x, y);
+                                    const blend_factor: f16 = transmission;
+                                    const blend = Color{
+                                        .r = @as(f16, @floatCast(color.x)) * (1.0 - blend_factor) + blend_factor * prev_color.r,
+                                        .g = @as(f16, @floatCast(color.y)) * (1.0 - blend_factor) + blend_factor * prev_color.g,
+                                        .b = @as(f16, @floatCast(color.z)) * (1.0 - blend_factor) + blend_factor * prev_color.b,
+                                    };
+
+                                    transcluent_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                    opaque_fb.putPixel(x, y, Color{ .r = blend.r, .g = blend.g, .b = blend.b }, 0.0);
+                                    depth_buffer.putPixel(x, y, z);
+                                } else {
+                                    transcluent_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
+                                    depth_buffer.putPixel(x, y, z);
+                                }
+                                opaque_tri = false;
+                            } else {
+                                opaque_tri = true;
+                                opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
+                                depth_buffer.putPixel(x, y, z);
+                            }
                         }
-                        w_x0 += dy0;
-                        w_x1 += dy1;
-                        w_x2 += dy2;
                     }
-                    w_y0 += dx0;
-                    w_y1 += dx1;
-                    w_y2 += dx2;
+                    w_x0 += dy0;
+                    w_x1 += dy1;
+                    w_x2 += dy2;
                 }
+                w_y0 += dx0;
+                w_y1 += dx1;
+                w_y2 += dx2;
             }
         }
+        // }
 
         if (opaque_tri) {
-            opaque_tri_count += count;
+            opaque_tri_count += 1;
         } else {
-            transcluent_tri_count += count;
+            transcluent_tri_count += 1;
         }
     }
 }
