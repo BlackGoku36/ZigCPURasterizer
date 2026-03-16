@@ -45,6 +45,25 @@ pub fn build(b: *std.Build) !void {
         run.addArgs(args);
     }
     b.step("run", "Run pacman").dependOn(&run.step);
+
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tests.zig"),
+            .imports = &.{
+                // .{ .name = "sokol", .module = sokol_module },
+                .{ .name = "zigimg", .module = zigimg_module },
+                // .{ .name = "shader", .module = try createShaderModule(b, sokol_dep, sokol_module) },
+                .{ .name = "zgltf", .module = zgltf_module },
+                // .{ .name = "clap", .module = clap_module },
+            },
+            .target = target,
+            .optimize = optimization,
+        }),
+    });
+
+    const run_unit_tests = b.addRunArtifact(tests);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_unit_tests.step);
 }
 
 fn createShaderModule(b: *std.Build, dep_sokol: *std.Build.Dependency, mod_sokol: *std.Build.Module) !*std.Build.Module {

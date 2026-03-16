@@ -266,8 +266,6 @@ pub fn main() !void {
         }
     }
 
-    stime.setup();
-
     if (!interactive) {
         rasterizer.init(input_file) catch |err| {
             std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
@@ -276,11 +274,11 @@ pub fn main() !void {
 
         var file_name_buffer: [100]u8 = undefined;
         for (0..rasterizer.scene.cameras.items.len) |idx| {
-            const start = stime.now();
+            const start = std.time.nanoTimestamp();
             try rasterizer.render(0, idx);
-            const end = stime.now();
+            const end = std.time.nanoTimestamp();
 
-            std.debug.print("Time: {d} ms\n", .{stime.ms(end - start)});
+            std.debug.print("{s:<15}: {d:>10.2} ns | {d:>10.4} ms\n", .{ "Time", end - start, @divFloor((end - start), std.time.ns_per_ms) });
 
             const formated_string = try std.fmt.bufPrint(&file_name_buffer, "{d}_{s}", .{ idx, output_file });
             if (std.mem.eql(u8, output_file_extension, ".hdr")) {
