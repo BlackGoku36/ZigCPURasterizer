@@ -109,6 +109,11 @@ var height_f32: f32 = 0;
 var opaque_tri_count: usize = 0;
 var transcluent_tri_count: usize = 0;
 
+var total_objects: usize = 0;
+var total_objects_inside: usize = 0;
+var total_objects_outside: usize = 0;
+var total_objects_intersect: usize = 0;
+
 pub fn init(gltf_file_path: []const u8) !void {
     scene = try Scene.fromGLTFFile(gltf_file_path, allocator);
 
@@ -149,10 +154,17 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
 
     for (meshes.items) |mesh| {
         if (!mesh.should_render) continue;
+        total_objects += 1;
 
-        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_sphere.center, mesh.bounding_sphere.radius);
+        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_structure.sphere.center, mesh.bounding_structure.sphere.radius);
+        // const culling_result = geometry.frustrumCullingBox(frustrum_planes, mesh.bounding_structure.box.center, mesh.bounding_structure.box.extent);
         if (culling_result == .outside) {
+            total_objects_outside += 1;
             continue;
+        } else if (culling_result == .inside) {
+            total_objects_inside += 1;
+        } else {
+            total_objects_intersect += 1;
         }
 
         const model_mat = mesh.transform;
@@ -282,13 +294,21 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
     for (scene.opaque_meshes.items) |mesh| {
         if (!mesh.should_render) continue;
 
+        total_objects += 1;
+
         // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
         // _ = theta;
         const model_mat = mesh.transform;
 
-        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_sphere.center, mesh.bounding_sphere.radius);
+        const culling_result = geometry.frustrumCullingSphere(frustrum_planes, mesh.bounding_structure.sphere.center, mesh.bounding_structure.sphere.radius);
+        // const culling_result = geometry.frustrumCullingBox(frustrum_planes, mesh.bounding_structure.box.center, mesh.bounding_structure.box.extent);
         if (culling_result == .outside) {
+            total_objects_outside += 1;
             continue;
+        } else if (culling_result == .inside) {
+            total_objects_inside += 1;
+        } else {
+            total_objects_intersect += 1;
         }
 
         // const model_mat = Matrix4.multMatrix4(rot_mat, mesh.transform);
@@ -1012,6 +1032,10 @@ const TriSortContext = struct {
 pub fn render(_: f32, camera: usize) !void {
     opaque_tri_count = 0;
     transcluent_tri_count = 0;
+    total_objects = 0;
+    total_objects_inside = 0;
+    total_objects_outside = 0;
+    total_objects_intersect = 0;
 
     opaque_fb.clearColor(0.0);
     transcluent_fb.clearColor(0.0);
@@ -1044,6 +1068,10 @@ pub fn render(_: f32, camera: usize) !void {
 
     std.debug.print("Opaque Tri Count: {d}\n", .{opaque_tri_count});
     std.debug.print("Transcluent Tri Count: {d}\n", .{transcluent_tri_count});
+    std.debug.print("Total Objects: {d}\n", .{total_objects});
+    std.debug.print("Objects outside: {d}\n", .{total_objects_outside});
+    std.debug.print("Objects inside: {d}\n", .{total_objects_inside});
+    std.debug.print("Objects on-plane: {d}\n", .{total_objects_intersect});
 }
 
 pub fn deinit() void {

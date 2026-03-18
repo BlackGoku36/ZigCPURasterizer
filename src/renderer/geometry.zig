@@ -165,6 +165,53 @@ fn clipPolygonAgainstAllPlane(polygon_in: *Polygon) u8 {
 }
 
 pub const BoundingSphere = struct { center: Vec3, radius: f32 };
+pub const BoundingBox = struct { center: Vec3, extent: Vec3 };
+pub const BoundingStructure = struct { sphere: BoundingSphere, box: BoundingBox };
+
+pub fn getBoundingStructure(vertices: []f32, vertices_len: usize, transform: Matrix4) BoundingStructure {
+    var min_vertex = Vec3{ .x = vertices[0], .y = vertices[1], .z = vertices[2] };
+    min_vertex = Matrix4.multVec3Point(transform, min_vertex);
+    var max_vertex = Vec3{ .x = vertices[0], .y = vertices[1], .z = vertices[2] };
+    max_vertex = Matrix4.multVec3Point(transform, max_vertex);
+
+    var index: usize = 3;
+    while (index < vertices_len) : (index += 3) {
+        var vertex = Vec3{ .x = vertices[index], .y = vertices[index + 1], .z = vertices[index + 2] };
+        vertex = Matrix4.multVec3Point(transform, vertex);
+
+        min_vertex.x = @min(min_vertex.x, vertex.x);
+        min_vertex.y = @min(min_vertex.y, vertex.y);
+        min_vertex.z = @min(min_vertex.z, vertex.z);
+
+        max_vertex.x = @max(max_vertex.x, vertex.x);
+        max_vertex.y = @max(max_vertex.y, vertex.y);
+        max_vertex.z = @max(max_vertex.z, vertex.z);
+    }
+
+    const center = Vec3.add(max_vertex, min_vertex).multf(0.5);
+    const extent = Vec3.sub(max_vertex, min_vertex).multf(0.5);
+
+    var max_radius: f32 = 0.0;
+    index = 0;
+    while (index < vertices_len) : (index += 3) {
+        var vertex = Vec3{ .x = vertices[index], .y = vertices[index + 1], .z = vertices[index + 2] };
+        vertex = Matrix4.multVec3Point(transform, vertex);
+
+        const dist = vertex.sub(center);
+        const dist_sq = Vec3.dot(dist, dist);
+        max_radius = @max(max_radius, dist_sq);
+    }
+
+    const sphere = BoundingSphere{
+        .center = center,
+        .radius = @sqrt(max_radius),
+    };
+
+    const box = BoundingBox{ .center = center, .extent = extent };
+
+    return BoundingStructure{ .sphere = sphere, .box = box };
+}
+
 pub fn getBoundingSphere(vertices: []f32, vertices_len: usize, transform: Matrix4) BoundingSphere {
     var min_vertex = Vec3{ .x = vertices[0], .y = vertices[1], .z = vertices[2] };
     min_vertex = Matrix4.multVec3Point(transform, min_vertex);
@@ -245,6 +292,53 @@ pub fn frustrumCullingSphere(frustrum_planes: [6]Vec4, sphere_pos: Vec3, sphere_
     }
 
     if (count == 6) {
+        return .inside;
+    } else {
+        return .on_plane;
+    }
+}
+
+pub fn frustrumCullingBox(frustrum_planes: [6]Vec4, box_center: Vec3, box_extent: Vec3) FrustrumCullResult {
+    var count2: u8 = 0;
+    for (frustrum_planes) |plane| {
+        var count: u8 = 0;
+        const plane_normal = plane.toVec3();
+        // const distance = plane_normal.dot(box_center) + plane.w;
+
+        if (plane_normal.x * (box_center.x - box_extent.x) + plane_normal.y * (box_center.y - box_extent.y) + plane_normal.z * (box_center.z - box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x + box_extent.x) + plane_normal.y * (box_center.y - box_extent.y) + plane_normal.z * (box_center.z - box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x - box_extent.x) + plane_normal.y * (box_center.y + box_extent.y) + plane_normal.z * (box_center.z - box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x - box_extent.x) + plane_normal.y * (box_center.y - box_extent.y) + plane_normal.z * (box_center.z + box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x + box_extent.x) + plane_normal.y * (box_center.y + box_extent.y) + plane_normal.z * (box_center.z - box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x - box_extent.x) + plane_normal.y * (box_center.y + box_extent.y) + plane_normal.z * (box_center.z + box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x + box_extent.x) + plane_normal.y * (box_center.y - box_extent.y) + plane_normal.z * (box_center.z + box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+        if (plane_normal.x * (box_center.x + box_extent.x) + plane_normal.y * (box_center.y + box_extent.y) + plane_normal.z * (box_center.z + box_extent.z) + plane.w > 0) {
+            count += 1;
+        }
+
+        if (count == 0) {
+            return .outside;
+        }
+        if (count == 8) {
+            count2 += 1;
+        }
+    }
+
+    if (count2 == 6) {
         return .inside;
     } else {
         return .on_plane;
