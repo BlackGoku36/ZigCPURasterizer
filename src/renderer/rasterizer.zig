@@ -30,6 +30,7 @@ const shaders = @import("shaders.zig");
 const material_import = @import("../material.zig");
 const Materials = material_import.Materials;
 const Material = material_import.Material;
+const MaterialType = material_import.MaterialType;
 
 const Mesh = @import("../mesh.zig").Mesh;
 const Scene = @import("../mesh.zig").Scene;
@@ -84,6 +85,104 @@ fn windingOrderTest(order: WindingOrder, w0: f32, w1: f32, w2: f32) bool {
 fn windingOrderNone(w0: f32, w1: f32, w2: f32) bool {
     return (w0 >= 0 and w1 >= 0 and w2 >= 0) or
         (w0 <= 0 and w1 <= 0 and w2 <= 0);
+}
+
+fn interpolatedVertexAttributeVec3(w: f32, area0: f32, area1: f32, area2: f32, v0: Vec3, v1: Vec3, v2: Vec3) Vec3 {
+    const frag_x = area1 * v0.x + area2 * v1.x + area0 * v2.x;
+    const frag_y = area1 * v0.y + area2 * v1.y + area0 * v2.y;
+    const frag_z = area1 * v0.z + area2 * v1.z + area0 * v2.z;
+
+    return Vec3{ .x = frag_x * w, .y = frag_y * w, .z = frag_z * w };
+}
+
+fn interpolatedVertexAttributeVec2(w: f32, area0: f32, area1: f32, area2: f32, v0: Vec2, v1: Vec2, v2: Vec2) Vec2 {
+    const frag_x = area1 * v0.x + area2 * v1.x + area0 * v2.x;
+    const frag_y = area1 * v0.y + area2 * v1.y + area0 * v2.y;
+
+    return Vec2{ .x = frag_x * w, .y = frag_y * w };
+}
+
+fn vertexFunction(
+    triangle_idx: usize,
+    mesh: Mesh,
+    active_material_type: MaterialType,
+    active_material_tex_coord: usize,
+    mvp_mat: Matrix4,
+) Tri {
+    var idx1: usize = 0;
+    var idx2: usize = 0;
+    var idx3: usize = 0;
+
+    idx1 = mesh.indices_32[triangle_idx];
+    idx2 = mesh.indices_32[triangle_idx + 1];
+    idx3 = mesh.indices_32[triangle_idx + 2];
+
+    const vert1 = Vec3{ .x = mesh.vertices[idx1 * 3 + 0], .y = mesh.vertices[idx1 * 3 + 1], .z = mesh.vertices[idx1 * 3 + 2] };
+    const vert2 = Vec3{ .x = mesh.vertices[idx2 * 3 + 0], .y = mesh.vertices[idx2 * 3 + 1], .z = mesh.vertices[idx2 * 3 + 2] };
+    const vert3 = Vec3{ .x = mesh.vertices[idx3 * 3 + 0], .y = mesh.vertices[idx3 * 3 + 1], .z = mesh.vertices[idx3 * 3 + 2] };
+
+    const norm1 = Vec3{ .x = mesh.normals[idx1 * 3 + 0], .y = mesh.normals[idx1 * 3 + 1], .z = mesh.normals[idx1 * 3 + 2] };
+    const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
+    const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
+
+    var tan1 = Vec3.init(0.0);
+    var tan2 = Vec3.init(0.0);
+    var tan3 = Vec3.init(0.0);
+
+    if (mesh.tangents) |tangents| {
+        tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
+        tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
+        tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
+    }
+
+    //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
+    var uv1: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
+    var uv2: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
+    var uv3: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
+
+    if (active_material_type == .Textured) {
+        const mesh_uv = mesh.uvs[active_material_tex_coord];
+        uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
+        uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
+        uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
+    }
+
+    const model_mat = mesh.transform;
+
+    const normalMatrix = Matrix4.removeTranslation(Matrix4.transpose(Matrix4.invert(model_mat)));
+    // normalMatrix.
+
+    const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
+    const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
+    const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
+
+    var newTan1 = Matrix4.multVec3Direction(normalMatrix, tan1);
+    var newTan2 = Matrix4.multVec3Direction(normalMatrix, tan2);
+    var newTan3 = Matrix4.multVec3Direction(normalMatrix, tan3);
+
+    // T = normalize(T - dot(T, N) * N);
+    newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
+    newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
+    newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
+
+    const newBitan1 = Vec3.cross(newTan1, newNorm1);
+    const newBitan2 = Vec3.cross(newTan2, newNorm2);
+    const newBitan3 = Vec3.cross(newTan3, newNorm3);
+
+    const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
+    const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
+    const world_pos3 = Matrix4.multVec3Point(model_mat, vert3);
+
+    const proj_vert1 = Matrix4.multVec4(mvp_mat, vert1);
+    const proj_vert2 = Matrix4.multVec4(mvp_mat, vert2);
+    const proj_vert3 = Matrix4.multVec4(mvp_mat, vert3);
+
+    var tri: Tri = undefined;
+    tri.v0 = Vertex{ .position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = newTan1, .bitangent = newBitan1 };
+    tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2 };
+    tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
+
+    return tri;
 }
 
 pub var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -198,78 +297,7 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
 
         var i: u32 = 0;
         while (i < indices_len) : (i += 3) {
-            var idx1: usize = 0;
-            var idx2: usize = 0;
-            var idx3: usize = 0;
-
-            idx1 = mesh.indices_32[i];
-            idx2 = mesh.indices_32[i + 1];
-            idx3 = mesh.indices_32[i + 2];
-
-            const vert1 = Vec3{ .x = mesh.vertices[idx1 * 3 + 0], .y = mesh.vertices[idx1 * 3 + 1], .z = mesh.vertices[idx1 * 3 + 2] };
-            const vert2 = Vec3{ .x = mesh.vertices[idx2 * 3 + 0], .y = mesh.vertices[idx2 * 3 + 1], .z = mesh.vertices[idx2 * 3 + 2] };
-            const vert3 = Vec3{ .x = mesh.vertices[idx3 * 3 + 0], .y = mesh.vertices[idx3 * 3 + 1], .z = mesh.vertices[idx3 * 3 + 2] };
-
-            const norm1 = Vec3{ .x = mesh.normals[idx1 * 3 + 0], .y = mesh.normals[idx1 * 3 + 1], .z = mesh.normals[idx1 * 3 + 2] };
-            const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
-            const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
-
-            var tan1 = Vec3.init(0.0);
-            var tan2 = Vec3.init(0.0);
-            var tan3 = Vec3.init(0.0);
-
-            if (mesh.tangents) |tangents| {
-                tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
-                tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
-                tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
-            }
-
-            //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
-            var uv1: Vec2 = undefined;
-            var uv2: Vec2 = undefined;
-            var uv3: Vec2 = undefined;
-            if (active_material.type == .Textured) {
-                const mesh_uv = mesh.uvs[active_material.tex_coord];
-                uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
-                uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
-                uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
-            } else {
-                uv1 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv2 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv3 = Vec2{ .x = 0.5, .y = 0.5 };
-            }
-
-            const normalMatrix = Matrix4.transpose(Matrix4.invert(model_mat));
-
-            const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
-            const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
-            const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
-
-            var newTan1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan1));
-            var newTan2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan2));
-            var newTan3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, tan3));
-
-            // T = normalize(T - dot(T, N) * N);
-            newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
-            newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
-            newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
-
-            const newBitan1 = Vec3.normalize(Vec3.cross(newTan1, newNorm1));
-            const newBitan2 = Vec3.normalize(Vec3.cross(newTan2, newNorm2));
-            const newBitan3 = Vec3.normalize(Vec3.cross(newTan3, newNorm3));
-
-            const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
-            const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
-            const world_pos3 = Matrix4.multVec3Point(model_mat, vert3);
-
-            const proj_vert1 = Matrix4.multVec4(model_view_projection_mat, vert1);
-            const proj_vert2 = Matrix4.multVec4(model_view_projection_mat, vert2);
-            const proj_vert3 = Matrix4.multVec4(model_view_projection_mat, vert3);
-
-            var tri: Tri = undefined;
-            tri.v0 = Vertex{ .position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = newTan1, .bitangent = newBitan1 };
-            tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2 };
-            tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
+            var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
             tri.material_idx = @intCast(mesh.material.?);
 
             var clipped_triangle: [8]Tri = undefined;
@@ -343,319 +371,225 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
 
         var i: u32 = 0;
         while (i < indices_len) : (i += 3) {
-            var idx1: usize = 0;
-            var idx2: usize = 0;
-            var idx3: usize = 0;
+            // TODO: Reinstate backface culling
+            const tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
 
-            idx1 = mesh.indices_32[i];
-            idx2 = mesh.indices_32[i + 1];
-            idx3 = mesh.indices_32[i + 2];
+            var clipped_triangle: [8]Tri = undefined;
+            var count: u8 = 1;
+            clipped_triangle[0] = tri;
 
-            const vert1 = Vec3{ .x = mesh.vertices[idx1 * 3 + 0], .y = mesh.vertices[idx1 * 3 + 1], .z = mesh.vertices[idx1 * 3 + 2] };
-            const vert2 = Vec3{ .x = mesh.vertices[idx2 * 3 + 0], .y = mesh.vertices[idx2 * 3 + 1], .z = mesh.vertices[idx2 * 3 + 2] };
-            const vert3 = Vec3{ .x = mesh.vertices[idx3 * 3 + 0], .y = mesh.vertices[idx3 * 3 + 1], .z = mesh.vertices[idx3 * 3 + 2] };
-
-            const norm1 = Vec3{ .x = mesh.normals[idx1 * 3 + 0], .y = mesh.normals[idx1 * 3 + 1], .z = mesh.normals[idx1 * 3 + 2] };
-            const norm2 = Vec3{ .x = mesh.normals[idx2 * 3 + 0], .y = mesh.normals[idx2 * 3 + 1], .z = mesh.normals[idx2 * 3 + 2] };
-            const norm3 = Vec3{ .x = mesh.normals[idx3 * 3 + 0], .y = mesh.normals[idx3 * 3 + 1], .z = mesh.normals[idx3 * 3 + 2] };
-
-            var tan1 = Vec3.init(0.0);
-            var tan2 = Vec3.init(0.0);
-            var tan3 = Vec3.init(0.0);
-
-            if (mesh.tangents) |tangents| {
-                tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
-                tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
-                tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
+            if (culling_result == .on_plane) {
+                count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
             }
 
-            //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
-            var uv1: Vec2 = undefined;
-            var uv2: Vec2 = undefined;
-            var uv3: Vec2 = undefined;
-            if (active_material.type == .Textured) {
-                const mesh_uv = mesh.uvs[active_material.tex_coord];
-                uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
-                uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
-                uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
-            } else {
-                uv1 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv2 = Vec2{ .x = 0.5, .y = 0.5 };
-                uv3 = Vec2{ .x = 0.5, .y = 0.5 };
-            }
+            opaque_tri_count += count;
 
-            const normalMatrix = Matrix4.removeTranslation(Matrix4.transpose(Matrix4.invert(model_mat)));
-            // normalMatrix.
+            for (clipped_triangle, 0..) |triangle, t_idx| {
+                if (t_idx >= count) break;
 
-            const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
-            const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
-            const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
+                const new_tri = Tri.clipToNDC(triangle);
 
-            var newTan1 = Matrix4.multVec3Direction(normalMatrix, tan1);
-            var newTan2 = Matrix4.multVec3Direction(normalMatrix, tan2);
-            var newTan3 = Matrix4.multVec3Direction(normalMatrix, tan3);
+                const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
+                const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
+                const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
 
-            // T = normalize(T - dot(T, N) * N);
-            newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
-            newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
-            newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
+                if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
+                    const area = edgeFunction(a, b, c.x, c.y);
 
-            const newBitan1 = Vec3.cross(newTan1, newNorm1);
-            const newBitan2 = Vec3.cross(newTan2, newNorm2);
-            const newBitan3 = Vec3.cross(newTan3, newNorm3);
+                    const xf32 = @as(f32, @floatFromInt(aabb.min_x));
+                    const yf32 = @as(f32, @floatFromInt(aabb.min_y));
 
-            const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
-            const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
-            const world_pos3 = Matrix4.multVec3Point(model_mat, vert3);
+                    var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
+                    var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
+                    var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
 
-            const proj_vert1 = Matrix4.multVec4(model_view_projection_mat, vert1);
-            const proj_vert2 = Matrix4.multVec4(model_view_projection_mat, vert2);
-            const proj_vert3 = Matrix4.multVec4(model_view_projection_mat, vert3);
+                    const dy0 = (b.y - a.y);
+                    const dy1 = (c.y - b.y);
+                    const dy2 = (a.y - c.y);
 
-            var tri: Tri = undefined;
-            tri.v0 = Vertex{ .position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = newTan1, .bitangent = newBitan1 };
-            tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2 };
-            tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
+                    const dx0 = (a.x - b.x);
+                    const dx1 = (b.x - c.x);
+                    const dx2 = (c.x - a.x);
 
-            if (Vec3.dot(newNorm1, Vec3.normalize(Vec3.sub(camera_pos, Matrix4.multVec3Point(model_mat, vert1)))) > -0.25) {
-                var clipped_triangle: [8]Tri = undefined;
-                var count: u8 = 1;
-                clipped_triangle[0] = tri;
+                    var y: u32 = aabb.min_y;
+                    while (y <= aabb.max_y) : (y += 1) {
+                        var x: u32 = aabb.min_x;
 
-                if (culling_result == .on_plane) {
-                    count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
-                }
+                        var w_x0: f32 = w_y0;
+                        var w_x1: f32 = w_y1;
+                        var w_x2: f32 = w_y2;
 
-                opaque_tri_count += count;
+                        while (x <= aabb.max_x) : (x += 1) {
+                            if (windingOrderTest(mesh.winding_order, w_x0, w_x1, w_x2)) {
+                                const area0 = w_x0 / area;
+                                const area1 = w_x1 / area;
+                                const area2 = w_x2 / area;
 
-                for (clipped_triangle, 0..) |triangle, t_idx| {
-                    if (t_idx >= count) break;
+                                const z = (area1 * new_tri.v0.position.z + area2 * new_tri.v1.position.z + area0 * new_tri.v2.position.z);
 
-                    const new_tri = Tri.clipToNDC(triangle);
+                                if (z < depth_buffer.getPixel(x, y)) {
+                                    const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
+                                    const w: f32 = 1 / one_over_w;
 
-                    const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
-                    const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
-                    const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
+                                    const frag_normal = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.normal, new_tri.v1.normal, new_tri.v2.normal));
+                                    const world = interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.world_position, new_tri.v1.world_position, new_tri.v2.world_position);
 
-                    if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
-                        const area = edgeFunction(a, b, c.x, c.y);
+                                    var albedo: Vec3 = Vec3.init(0.0);
+                                    var normal: Vec3 = Vec3.init(0.0);
+                                    var metallic: f32 = 0.0;
+                                    var roughness: f32 = 0.0;
+                                    var ao: f32 = 0.0;
 
-                        const xf32 = @as(f32, @floatFromInt(aabb.min_x));
-                        const yf32 = @as(f32, @floatFromInt(aabb.min_y));
+                                    var emissive: Vec3 = Vec3.init(0.0);
 
-                        var w_y0: f32 = edgeFunction(a, b, xf32, yf32);
-                        var w_y1: f32 = edgeFunction(b, c, xf32, yf32);
-                        var w_y2: f32 = edgeFunction(c, a, xf32, yf32);
+                                    if (active_material.type == .Textured) {
+                                        var tex_uv = interpolatedVertexAttributeVec2(w, area0, area1, area2, new_tri.v0.uv, new_tri.v1.uv, new_tri.v2.uv);
+                                        tex_uv.x = @mod(tex_uv.x, 1.0);
+                                        tex_uv.y = @mod(tex_uv.y, 1.0);
 
-                        const dy0 = (b.y - a.y);
-                        const dy1 = (c.y - b.y);
-                        const dy2 = (a.y - c.y);
+                                        const tangent = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.tangent, new_tri.v1.tangent, new_tri.v2.tangent));
+                                        const bitangent = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.bitangent, new_tri.v1.bitangent, new_tri.v2.bitangent));
 
-                        const dx0 = (a.x - b.x);
-                        const dx1 = (b.x - c.x);
-                        const dx2 = (c.x - a.x);
-
-                        var y: u32 = aabb.min_y;
-                        while (y <= aabb.max_y) : (y += 1) {
-                            var x: u32 = aabb.min_x;
-
-                            var w_x0: f32 = w_y0;
-                            var w_x1: f32 = w_y1;
-                            var w_x2: f32 = w_y2;
-
-                            while (x <= aabb.max_x) : (x += 1) {
-                                if (windingOrderTest(mesh.winding_order, w_x0, w_x1, w_x2)) {
-                                    const area0 = w_x0 / area;
-                                    const area1 = w_x1 / area;
-                                    const area2 = w_x2 / area;
-
-                                    const z = (area1 * new_tri.v0.position.z + area2 * new_tri.v1.position.z + area0 * new_tri.v2.position.z);
-
-                                    if (z < depth_buffer.getPixel(x, y)) {
-                                        const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
-                                        const w: f32 = 1 / one_over_w;
-
-                                        const norx = area1 * new_tri.v0.normal.x + area2 * new_tri.v1.normal.x + area0 * new_tri.v2.normal.x;
-                                        const nory = area1 * new_tri.v0.normal.y + area2 * new_tri.v1.normal.y + area0 * new_tri.v2.normal.y;
-                                        const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
-                                        const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
-
-                                        var albedo: Vec3 = Vec3.init(0.0);
-                                        var normal: Vec3 = Vec3.init(0.0);
-                                        var metallic: f32 = 0.0;
-                                        var roughness: f32 = 0.0;
-                                        var ao: f32 = 0.0;
-
-                                        var emissive: Vec3 = Vec3.init(0.0);
-
-                                        if (active_material.type == .Textured) {
-                                            var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
-                                            var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
-
-                                            u *= w;
-                                            v *= w;
-
-                                            u = @mod(u, 1.0);
-                                            v = @mod(v, 1.0);
-
-                                            const tex_uv = Vec2{ .x = u, .y = v };
-
-                                            const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
-                                            const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
-                                            const tangentz = area1 * new_tri.v0.tangent.z + area2 * new_tri.v1.tangent.z + area0 * new_tri.v2.tangent.z;
-                                            const tangent = Vec3.normalize(Vec3{ .x = tangentx * w, .y = tangenty * w, .z = tangentz * w });
-
-                                            const bitangentx = area1 * new_tri.v0.bitangent.x + area2 * new_tri.v1.bitangent.x + area0 * new_tri.v2.bitangent.x;
-                                            const bitangenty = area1 * new_tri.v0.bitangent.y + area2 * new_tri.v1.bitangent.y + area0 * new_tri.v2.bitangent.y;
-                                            const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
-                                            const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
-
-                                            const pbr = shaders.pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
-                                            if (pbr.albedo.w < 0.1) {
-                                                continue;
-                                            }
-
-                                            albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
-
-                                            var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
-                                            normal_map = Vec3.normalize(normal_map);
-
-                                            metallic = @floatCast(pbr.metallic);
-                                            roughness = @floatCast(pbr.roughness);
-                                            ao = @floatCast(pbr.ao);
-                                            emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
-
-                                            normal = frag_normal;
-                                            if (active_material.pbr_texture.?.normal) {
-                                                normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
-                                                normal = Vec3.normalize(normal);
-                                            }
-                                        } else {
-                                            const pbr_solid = active_material.pbr_solid.?;
-                                            albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
-                                            normal = frag_normal;
-                                            metallic = @floatCast(pbr_solid.metallic);
-                                            roughness = @floatCast(pbr_solid.roughness);
-                                            ao = @floatCast(pbr_solid.ao);
-
-                                            emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
+                                        const pbr = shaders.pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
+                                        if (pbr.albedo.w < 0.1) {
+                                            continue;
                                         }
 
-                                        albedo = albedo.multf(ao);
+                                        albedo = Vec3{ .x = @floatCast(pbr.albedo.x), .y = @floatCast(pbr.albedo.y), .z = @floatCast(pbr.albedo.z) };
 
-                                        const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
-                                        const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
-                                        const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
-                                        const world = Vec3{ .x = worldx * w, .y = worldy * w, .z = worldz * w };
+                                        var normal_map = Vec3{ .x = @floatCast(pbr.normal.x), .y = @floatCast(pbr.normal.y), .z = @floatCast(pbr.normal.z) };
+                                        normal_map = Vec3.normalize(normal_map);
 
-                                        const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
+                                        metallic = @floatCast(pbr.metallic);
+                                        roughness = @floatCast(pbr.roughness);
+                                        ao = @floatCast(pbr.ao);
+                                        emissive = Vec3{ .x = pbr.emissive.x, .y = pbr.emissive.y, .z = pbr.emissive.z };
 
-                                        var Lo: Vec3 = Vec3.init(0.0);
-
-                                        var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
-                                        f0 = Vec3.lerp(f0, albedo, metallic);
-
-                                        for (scene.lights.items) |light| {
-                                            if (light.type == .Area) {
-                                                const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
-
-                                                var uv = Vec2{ .x = roughness, .y = @sqrt(1.0 - dotNV) };
-                                                uv = uv.multf(shaders.lut_scale).add(Vec2{ .x = shaders.lut_bias, .y = shaders.lut_bias });
-
-                                                const t1 = shaders.bilinearClampSample(LTC1, uv);
-                                                const t2 = shaders.bilinearClampSample(LTC2, uv);
-
-                                                const mInv = Matrix4.fromVec3(
-                                                    Vec3{ .x = t1.x, .y = 0.0, .z = t1.y },
-                                                    Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 },
-                                                    Vec3{ .x = t1.z, .y = 0.0, .z = t1.w },
-                                                );
-
-                                                var verts: [4]Vec3 = undefined;
-                                                // verts[0] = Matrix4.multVec3(rot_mat, light.verts.?[0]);
-                                                // verts[1] = Matrix4.multVec3(rot_mat, light.verts.?[1]);
-                                                // verts[2] = Matrix4.multVec3(rot_mat, light.verts.?[2]);
-                                                // verts[3] = Matrix4.multVec3(rot_mat, light.verts.?[3]);
-                                                verts[0] = light.verts.?[0];
-                                                verts[1] = light.verts.?[1];
-                                                verts[2] = light.verts.?[2];
-                                                verts[3] = light.verts.?[3];
-
-                                                const diffuse = shaders.areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
-                                                var specular = shaders.areaLightContribution(normal, view_dir, world, mInv, verts);
-
-                                                const fresnel = Vec3{
-                                                    .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
-                                                    .y = f0.y * t2.x + (1.0 - f0.y) * t2.y,
-                                                    .z = f0.z * t2.x + (1.0 - f0.z) * t2.y,
-                                                };
-
-                                                specular = specular.multv(fresnel);
-                                                const kD = Vec3.init(1.0 - metallic);
-
-                                                const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
-                                                const radiance = light.color;
-                                                const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
-
-                                                Lo = Lo.add(Lo1);
-                                            } else {
-                                                var light_dir: Vec3 = Vec3.init(0.0);
-                                                var radiance: Vec3 = Vec3.init(0.0);
-                                                if (light.type == .Directional) {
-                                                    light_dir = Vec3.normalize(light.pos);
-                                                    light_dir = Vec3.multf(light_dir, -1.0);
-                                                    radiance = light.color.multf(light.intensity);
-                                                } else if (light.type == .Point) {
-                                                    light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
-                                                    const distance = Vec3.getLength(Vec3.sub(light.pos, world));
-                                                    const attenuation = 1.0 / (distance * distance + 1.0);
-
-                                                    radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
-                                                }
-                                                const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
-
-                                                const fresnel: Vec3 = shaders.fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
-
-                                                const normal_distr: f32 = shaders.normalDistributionGGX(normal, half_vec, roughness);
-                                                const geometryS: f32 = shaders.geometrySmith(normal, view_dir, light_dir, roughness);
-
-                                                const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
-                                                const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
-                                                const specular: Vec3 = numerator.multf(1 / denominator);
-
-                                                const kS: Vec3 = fresnel;
-                                                var kD: Vec3 = Vec3.init(1.0).sub(kS);
-
-                                                kD = kD.multf(1.0 - metallic);
-
-                                                const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
-                                                const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
-                                                const Lo2 = Vec3.add(Lo1, specular);
-                                                Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
-                                            }
+                                        normal = frag_normal;
+                                        if (active_material.pbr_texture.?.normal) {
+                                            normal = Vec3.add(Vec3.multf(tangent, normal_map.x), Vec3.add(Vec3.multf(bitangent, normal_map.y), Vec3.multf(frag_normal, normal_map.z)));
+                                            normal = Vec3.normalize(normal);
                                         }
+                                    } else {
+                                        const pbr_solid = active_material.pbr_solid.?;
+                                        albedo = Vec3{ .x = @floatCast(pbr_solid.albedo.x), .y = @floatCast(pbr_solid.albedo.y), .z = @floatCast(pbr_solid.albedo.z) };
+                                        normal = frag_normal;
+                                        metallic = @floatCast(pbr_solid.metallic);
+                                        roughness = @floatCast(pbr_solid.roughness);
+                                        ao = @floatCast(pbr_solid.ao);
 
-                                        const ambient_col = (scene.ambient_light).multf(0.025);
-                                        const ambient = ambient_col.multv(albedo).multf(ao);
-                                        var color = Vec3.add(ambient, Lo);
-                                        // var color = Lo;
-                                        color = color.add(emissive);
-                                        // color = color.divv(color.add(Vec3.init(1.0)));
-                                        // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
-
-                                        // opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
-                                        opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
-                                        depth_buffer.putPixel(x, y, @floatCast(z));
+                                        emissive = Vec3{ .x = @floatCast(pbr_solid.emissive.x), .y = @floatCast(pbr_solid.emissive.y), .z = @floatCast(pbr_solid.emissive.z) };
                                     }
+
+                                    albedo = albedo.multf(ao);
+
+                                    const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
+
+                                    var Lo: Vec3 = Vec3.init(0.0);
+
+                                    var f0 = Vec3{ .x = 0.04, .y = 0.04, .z = 0.04 };
+                                    f0 = Vec3.lerp(f0, albedo, metallic);
+
+                                    for (scene.lights.items) |light| {
+                                        if (light.type == .Area) {
+                                            const dotNV = std.math.clamp(Vec3.dot(normal, view_dir), 0.0, 1.0);
+
+                                            var uv = Vec2{ .x = roughness, .y = @sqrt(1.0 - dotNV) };
+                                            uv = uv.multf(shaders.lut_scale).add(Vec2{ .x = shaders.lut_bias, .y = shaders.lut_bias });
+
+                                            const t1 = shaders.bilinearClampSample(LTC1, uv);
+                                            const t2 = shaders.bilinearClampSample(LTC2, uv);
+
+                                            const mInv = Matrix4.fromVec3(
+                                                Vec3{ .x = t1.x, .y = 0.0, .z = t1.y },
+                                                Vec3{ .x = 0.0, .y = 1.0, .z = 0.0 },
+                                                Vec3{ .x = t1.z, .y = 0.0, .z = t1.w },
+                                            );
+
+                                            var verts: [4]Vec3 = undefined;
+                                            // verts[0] = Matrix4.multVec3(rot_mat, light.verts.?[0]);
+                                            // verts[1] = Matrix4.multVec3(rot_mat, light.verts.?[1]);
+                                            // verts[2] = Matrix4.multVec3(rot_mat, light.verts.?[2]);
+                                            // verts[3] = Matrix4.multVec3(rot_mat, light.verts.?[3]);
+                                            verts[0] = light.verts.?[0];
+                                            verts[1] = light.verts.?[1];
+                                            verts[2] = light.verts.?[2];
+                                            verts[3] = light.verts.?[3];
+
+                                            const diffuse = shaders.areaLightContribution(normal, view_dir, world, Matrix4.getIdentity(), verts);
+                                            var specular = shaders.areaLightContribution(normal, view_dir, world, mInv, verts);
+
+                                            const fresnel = Vec3{
+                                                .x = f0.x * t2.x + (1.0 - f0.x) * t2.y,
+                                                .y = f0.y * t2.x + (1.0 - f0.y) * t2.y,
+                                                .z = f0.z * t2.x + (1.0 - f0.z) * t2.y,
+                                            };
+
+                                            specular = specular.multv(fresnel);
+                                            const kD = Vec3.init(1.0 - metallic);
+
+                                            const l_diffuse = kD.multv(albedo.multv(diffuse).multf(1.0 / std.math.pi));
+                                            const radiance = light.color;
+                                            const Lo1 = Vec3.add(specular, l_diffuse).multv(radiance);
+
+                                            Lo = Lo.add(Lo1);
+                                        } else {
+                                            var light_dir: Vec3 = Vec3.init(0.0);
+                                            var radiance: Vec3 = Vec3.init(0.0);
+                                            if (light.type == .Directional) {
+                                                light_dir = Vec3.normalize(light.pos);
+                                                light_dir = Vec3.multf(light_dir, -1.0);
+                                                radiance = light.color.multf(light.intensity);
+                                            } else if (light.type == .Point) {
+                                                light_dir = Vec3.normalize(Vec3.sub(light.pos, world));
+                                                const distance = Vec3.getLength(Vec3.sub(light.pos, world));
+                                                const attenuation = 1.0 / (distance * distance + 1.0);
+
+                                                radiance = Vec3.multf(light.color.multf(light.intensity), attenuation);
+                                            }
+                                            const half_vec = Vec3.normalize(Vec3.add(light_dir, view_dir));
+
+                                            const fresnel: Vec3 = shaders.fresnelSchlick(f0, @max(Vec3.dot(half_vec, view_dir), 0.0));
+
+                                            const normal_distr: f32 = shaders.normalDistributionGGX(normal, half_vec, roughness);
+                                            const geometryS: f32 = shaders.geometrySmith(normal, view_dir, light_dir, roughness);
+
+                                            const numerator: Vec3 = fresnel.multf(geometryS * normal_distr);
+                                            const denominator: f32 = 4.0 * @max(Vec3.dot(normal, view_dir), 0.0) * @max(Vec3.dot(normal, light_dir), 0.0) + 0.0001;
+                                            const specular: Vec3 = numerator.multf(1 / denominator);
+
+                                            const kS: Vec3 = fresnel;
+                                            var kD: Vec3 = Vec3.init(1.0).sub(kS);
+
+                                            kD = kD.multf(1.0 - metallic);
+
+                                            const NdotL: f32 = @max(Vec3.dot(normal, light_dir), 0.0);
+                                            const Lo1 = Vec3.multv(kD, Vec3.multf(albedo, 1.0 / std.math.pi));
+                                            const Lo2 = Vec3.add(Lo1, specular);
+                                            Lo = Vec3.add(Lo, Vec3.multv(Lo2, radiance).multf(NdotL));
+                                        }
+                                    }
+
+                                    const ambient_col = (scene.ambient_light).multf(0.025);
+                                    const ambient = ambient_col.multv(albedo).multf(ao);
+                                    var color = Vec3.add(ambient, Lo);
+                                    // var color = Lo;
+                                    color = color.add(emissive);
+                                    // color = color.divv(color.add(Vec3.init(1.0)));
+                                    // const srgb = zigimg.color.sRGB.toGamma(zigimg.color.Colorf32.from.rgb(color.x, color.y, color.z));
+
+                                    // opaque_fb.putPixel(x, y, Color{ .r = @floatCast(srgb.r), .g = @floatCast(srgb.g), .b = @floatCast(srgb.b) }, 1.0);
+                                    opaque_fb.putPixel(x, y, Color{ .r = @floatCast(color.x), .g = @floatCast(color.y), .b = @floatCast(color.z) }, 1.0);
+                                    depth_buffer.putPixel(x, y, @floatCast(z));
                                 }
-                                w_x0 += dy0;
-                                w_x1 += dy1;
-                                w_x2 += dy2;
                             }
-                            w_y0 += dx0;
-                            w_y1 += dx1;
-                            w_y2 += dx2;
+                            w_x0 += dy0;
+                            w_x1 += dy1;
+                            w_x2 += dy2;
                         }
+                        w_y0 += dx0;
+                        w_y1 += dx1;
+                        w_y2 += dx2;
                     }
                 }
             }
@@ -719,10 +653,8 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                             const one_over_w = (area1 * (1 / new_tri.v0.position.w) + area2 * (1 / new_tri.v1.position.w) + area0 * (1 / new_tri.v2.position.w));
                             const w: f32 = 1 / one_over_w;
 
-                            const norx = area1 * new_tri.v0.normal.x + area2 * new_tri.v1.normal.x + area0 * new_tri.v2.normal.x;
-                            const nory = area1 * new_tri.v0.normal.y + area2 * new_tri.v1.normal.y + area0 * new_tri.v2.normal.y;
-                            const norz = area1 * new_tri.v0.normal.z + area2 * new_tri.v1.normal.z + area0 * new_tri.v2.normal.z;
-                            const frag_normal = Vec3.normalize(Vec3{ .x = norx * w, .y = nory * w, .z = norz * w });
+                            const frag_normal = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.normal, new_tri.v1.normal, new_tri.v2.normal));
+                            const world = interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.world_position, new_tri.v1.world_position, new_tri.v2.world_position);
 
                             var albedo: Vec3 = Vec3.init(0.0);
                             var normal: Vec3 = Vec3.init(0.0);
@@ -736,26 +668,12 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                             var ior: f16 = 1.5;
 
                             if (active_material.type == .Textured) {
-                                var u = area1 * new_tri.v0.uv.x + area2 * new_tri.v1.uv.x + area0 * new_tri.v2.uv.x;
-                                var v = area1 * new_tri.v0.uv.y + area2 * new_tri.v1.uv.y + area0 * new_tri.v2.uv.y;
+                                var tex_uv = interpolatedVertexAttributeVec2(w, area0, area1, area2, new_tri.v0.uv, new_tri.v1.uv, new_tri.v2.uv);
+                                tex_uv.x = @mod(tex_uv.x, 1.0);
+                                tex_uv.y = @mod(tex_uv.y, 1.0);
 
-                                u *= w;
-                                v *= w;
-
-                                u = @mod(u, 1.0);
-                                v = @mod(v, 1.0);
-
-                                const tex_uv = Vec2{ .x = u, .y = v };
-
-                                const tangentx = area1 * new_tri.v0.tangent.x + area2 * new_tri.v1.tangent.x + area0 * new_tri.v2.tangent.x;
-                                const tangenty = area1 * new_tri.v0.tangent.y + area2 * new_tri.v1.tangent.y + area0 * new_tri.v2.tangent.y;
-                                const tangentz = area1 * new_tri.v0.tangent.z + area2 * new_tri.v1.tangent.z + area0 * new_tri.v2.tangent.z;
-                                const tangent = Vec3.normalize(Vec3{ .x = tangentx * w, .y = tangenty * w, .z = tangentz * w });
-
-                                const bitangentx = area1 * new_tri.v0.bitangent.x + area2 * new_tri.v1.bitangent.x + area0 * new_tri.v2.bitangent.x;
-                                const bitangenty = area1 * new_tri.v0.bitangent.y + area2 * new_tri.v1.bitangent.y + area0 * new_tri.v2.bitangent.y;
-                                const bitangentz = area1 * new_tri.v0.bitangent.z + area2 * new_tri.v1.bitangent.z + area0 * new_tri.v2.bitangent.z;
-                                const bitangent = Vec3.normalize(Vec3{ .x = bitangentx * w, .y = bitangenty * w, .z = bitangentz * w });
+                                const tangent = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.tangent, new_tri.v1.tangent, new_tri.v2.tangent));
+                                const bitangent = Vec3.normalize(interpolatedVertexAttributeVec3(w, area0, area1, area2, new_tri.v0.bitangent, new_tri.v1.bitangent, new_tri.v2.bitangent));
 
                                 const pbr = shaders.pbrBilinearSample(active_material.pbr_texture.?, tex_uv);
                                 // if (pbr.albedo.w < 0.1) {
@@ -791,11 +709,6 @@ pub fn renderTranscluentMeshes(view_projection_mat: Matrix4) !void {
                                 transmission = pbr_solid.transmission;
                                 ior = pbr_solid.ior;
                             }
-
-                            const worldx = area1 * new_tri.v0.world_position.x + area2 * new_tri.v1.world_position.x + area0 * new_tri.v2.world_position.x;
-                            const worldy = area1 * new_tri.v0.world_position.y + area2 * new_tri.v1.world_position.y + area0 * new_tri.v2.world_position.y;
-                            const worldz = area1 * new_tri.v0.world_position.z + area2 * new_tri.v1.world_position.z + area0 * new_tri.v2.world_position.z;
-                            const world = Vec3{ .x = worldx * w, .y = worldy * w, .z = worldz * w };
 
                             const view_dir = Vec3.normalize(Vec3.sub(camera_pos, world));
 

@@ -17,9 +17,9 @@ test "Junk Shop" {
     // const allocator = gpa.allocator();
 
     // if (!interactive) {
-    // rasterizer.init("/Users/urjasvisuthar/ZigCPURasterizer/assets/tavern/Untitled.gltf") catch |err| {
-    rasterizer.init("/Users/urjasvisuthar/ZigCPURasterizer/assets/junkshop_temp/thejunkshopsplashscreen-2.gltf") catch |err| {
-        // rasterizer.init("/Users/urjasvisuthar/ZigCPURasterizer/assets/bistro/Untitled.gltf") catch |err| {
+    // rasterizer.init("/Users/urjasvisuthar/cpu_rasterizer/ZigCPURasterizer/assets/tavern/Untitled.gltf") catch |err| {
+    rasterizer.init("/Users/urjasvisuthar/cpu_rasterizer/ZigCPURasterizer/assets/junkshop_temp/thejunkshopsplashscreen-2.gltf") catch |err| {
+        // rasterizer.init("/Users/urjasvisuthar/cpu_rasterizer/ZigCPURasterizer/assets/bistro/Untitled.gltf") catch |err| {
         std.debug.print("Error initializing the rasterizer: {any}\n", .{err});
     };
     defer rasterizer.deinit();
