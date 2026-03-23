@@ -129,45 +129,46 @@ fn vertexFunction(
     var tan2 = Vec3.init(0.0);
     var tan3 = Vec3.init(0.0);
 
-    if (mesh.tangents) |tangents| {
-        tan1 = Vec3{ .x = tangents[idx1 * 3 + 0], .y = tangents[idx1 * 3 + 1], .z = tangents[idx1 * 3 + 2] };
-        tan2 = Vec3{ .x = tangents[idx2 * 3 + 0], .y = tangents[idx2 * 3 + 1], .z = tangents[idx2 * 3 + 2] };
-        tan3 = Vec3{ .x = tangents[idx3 * 3 + 0], .y = tangents[idx3 * 3 + 1], .z = tangents[idx3 * 3 + 2] };
-    }
+    var bitan1: Vec3 = Vec3.init(0.0);
+    var bitan2: Vec3 = Vec3.init(0.0);
+    var bitan3: Vec3 = Vec3.init(0.0);
 
     //TODO: Instead of doing if statement, create seperate pipeline for meshes with no uvs
     var uv1: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
     var uv2: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
     var uv3: Vec2 = Vec2{ .x = 0.5, .y = 0.5 };
 
-    if (active_material_type == .Textured) {
-        const mesh_uv = mesh.uvs[active_material_tex_coord];
-        uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
-        uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
-        uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
-    }
-
     const model_mat = mesh.transform;
 
     const normalMatrix = Matrix4.removeTranslation(Matrix4.transpose(Matrix4.invert(model_mat)));
-    // normalMatrix.
 
     const newNorm1 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm1));
     const newNorm2 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm2));
     const newNorm3 = Vec3.normalize(Matrix4.multVec3Direction(normalMatrix, norm3));
 
-    var newTan1 = Matrix4.multVec3Direction(normalMatrix, tan1);
-    var newTan2 = Matrix4.multVec3Direction(normalMatrix, tan2);
-    var newTan3 = Matrix4.multVec3Direction(normalMatrix, tan3);
+    if (active_material_type == .Textured) {
+        const mesh_uv = mesh.uvs[active_material_tex_coord];
+        uv1 = Vec2{ .x = mesh_uv[idx1 * 2 + 0], .y = mesh_uv[idx1 * 2 + 1] };
+        uv2 = Vec2{ .x = mesh_uv[idx2 * 2 + 0], .y = mesh_uv[idx2 * 2 + 1] };
+        uv3 = Vec2{ .x = mesh_uv[idx3 * 2 + 0], .y = mesh_uv[idx3 * 2 + 1] };
 
-    // T = normalize(T - dot(T, N) * N);
-    newTan1 = Vec3.normalize(Vec3.sub(newTan1, Vec3.multf(newNorm1, Vec3.dot(newTan1, newNorm1))));
-    newTan2 = Vec3.normalize(Vec3.sub(newTan2, Vec3.multf(newNorm2, Vec3.dot(newTan2, newNorm2))));
-    newTan3 = Vec3.normalize(Vec3.sub(newTan3, Vec3.multf(newNorm3, Vec3.dot(newTan3, newNorm3))));
+        tan1 = Vec3{ .x = mesh.tangents[idx1 * 3 + 0], .y = mesh.tangents[idx1 * 3 + 1], .z = mesh.tangents[idx1 * 3 + 2] };
+        tan2 = Vec3{ .x = mesh.tangents[idx2 * 3 + 0], .y = mesh.tangents[idx2 * 3 + 1], .z = mesh.tangents[idx2 * 3 + 2] };
+        tan3 = Vec3{ .x = mesh.tangents[idx3 * 3 + 0], .y = mesh.tangents[idx3 * 3 + 1], .z = mesh.tangents[idx3 * 3 + 2] };
 
-    const newBitan1 = Vec3.cross(newTan1, newNorm1);
-    const newBitan2 = Vec3.cross(newTan2, newNorm2);
-    const newBitan3 = Vec3.cross(newTan3, newNorm3);
+        tan1 = Matrix4.multVec3Direction(normalMatrix, tan1);
+        tan2 = Matrix4.multVec3Direction(normalMatrix, tan2);
+        tan3 = Matrix4.multVec3Direction(normalMatrix, tan3);
+
+        // T = normalize(T - dot(T, N) * N);
+        tan1 = Vec3.normalize(Vec3.sub(tan1, Vec3.multf(newNorm1, Vec3.dot(tan1, newNorm1))));
+        tan2 = Vec3.normalize(Vec3.sub(tan2, Vec3.multf(newNorm2, Vec3.dot(tan2, newNorm2))));
+        tan3 = Vec3.normalize(Vec3.sub(tan3, Vec3.multf(newNorm3, Vec3.dot(tan3, newNorm3))));
+
+        bitan1 = Vec3.cross(tan1, newNorm1);
+        bitan2 = Vec3.cross(tan2, newNorm2);
+        bitan3 = Vec3.cross(tan3, newNorm3);
+    }
 
     const world_pos1 = Matrix4.multVec3Point(model_mat, vert1);
     const world_pos2 = Matrix4.multVec3Point(model_mat, vert2);
@@ -178,9 +179,9 @@ fn vertexFunction(
     const proj_vert3 = Matrix4.multVec4(mvp_mat, vert3);
 
     var tri: Tri = undefined;
-    tri.v0 = Vertex{ .position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = newTan1, .bitangent = newBitan1 };
-    tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = newTan2, .bitangent = newBitan2 };
-    tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = newTan3, .bitangent = newBitan3 };
+    tri.v0 = Vertex{ .position = proj_vert1, .world_position = world_pos1, .normal = newNorm1, .uv = uv1, .tangent = tan1, .bitangent = bitan1 };
+    tri.v1 = Vertex{ .position = proj_vert2, .world_position = world_pos2, .normal = newNorm2, .uv = uv2, .tangent = tan2, .bitangent = bitan2 };
+    tri.v2 = Vertex{ .position = proj_vert3, .world_position = world_pos3, .normal = newNorm3, .uv = uv3, .tangent = tan3, .bitangent = bitan3 };
 
     return tri;
 }

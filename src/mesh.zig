@@ -19,7 +19,7 @@ pub const Mesh = struct {
     uvs: [4][]f32,
     uvs_count: u8,
     normals: []f32,
-    tangents: ?[]f32,
+    tangents: []f32,
     name: []u8,
     indices_32: []u32,
     transform: Matrix4,
@@ -101,12 +101,15 @@ pub fn getMeshFromNode(
         // TODO: primitives means subgroups of mesh and not entire mesh
 
         var vertices: []f32 = undefined;
-        var normals: ?[]f32 = null;
-        var tangents: ?[]f32 = null;
+        var normals: []f32 = undefined;
+        var tangents: []f32 = undefined;
         var uvs: [4][]f32 = undefined;
         var indices_32: []u32 = undefined;
 
         var winding_order: WindingOrder = .CCW;
+
+        var normals_exists: bool = false;
+        var tangents_exists: bool = false;
 
         const indices_accessor = gltf.data.accessors[p.indices.?];
         if (indices_accessor.component_type == .unsigned_short) {
@@ -131,6 +134,7 @@ pub fn getMeshFromNode(
                 .normal => |accessor_index| {
                     const accessor = gltf.data.accessors[accessor_index];
                     normals = try gltf.getDataFromBufferView(f32, allocator, accessor, binary);
+                    normals_exists = true;
                 },
                 .texcoord => |accessor_index| {
                     const accessor = gltf.data.accessors[accessor_index];
@@ -140,6 +144,7 @@ pub fn getMeshFromNode(
                 .tangent => |accessor_index| {
                     const accessor = gltf.data.accessors[accessor_index];
                     tangents = try gltf.getDataFromBufferView(f32, allocator, accessor, binary);
+                    tangents_exists = true;
                 },
                 .color => {
                     std.debug.print("Color attribute found! Must color_factor by this! Not Implemented Yet!\n", .{});
@@ -156,10 +161,10 @@ pub fn getMeshFromNode(
             winding_order = .CCW;
         }
 
-        if (normals == null) {
+        if (!normals_exists) {
             normals = try geometry.calculateVertexNormals(allocator, vertices, indices_32);
         }
-        if (tangents == null and tex_coord_count > 0) {
+        if (!tangents_exists and tex_coord_count > 0) {
             //TODO: we are using the first uvs. what about others?
             tangents = try geometry.calculateTangents(allocator, vertices, uvs[0], indices_32);
         }
@@ -174,7 +179,7 @@ pub fn getMeshFromNode(
                 .vertices = vertices,
                 .uvs = uvs,
                 .uvs_count = tex_coord_count,
-                .normals = normals.?,
+                .normals = normals,
                 .tangents = tangents,
                 .indices_32 = indices_32,
                 .name = name,
@@ -189,7 +194,7 @@ pub fn getMeshFromNode(
                 .vertices = vertices,
                 .uvs = uvs,
                 .uvs_count = tex_coord_count,
-                .normals = normals.?,
+                .normals = normals,
                 .tangents = tangents,
                 .indices_32 = indices_32,
                 .name = name,
