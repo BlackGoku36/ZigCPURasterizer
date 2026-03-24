@@ -270,8 +270,7 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
         const model_mat = mesh.transform;
         const model_view_projection_mat = Matrix4.multMatrix4(vp_matrix, model_mat);
 
-        var indices_len: usize = 0;
-        indices_len = mesh.indices_32.len;
+        const indices_len: usize = mesh.indices_32.len;
 
         // std.debug.print("Mesh name: {s}\n", .{mesh.name});
         var active_material: Material = undefined;
@@ -296,22 +295,27 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             };
         }
 
-        var i: u32 = 0;
-        while (i < indices_len) : (i += 3) {
-            var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
-            tri.material_idx = @intCast(mesh.material.?);
+        if (culling_result == .on_plane) {
+            var i: u32 = 0;
+            while (i < indices_len) : (i += 3) {
+                var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
+                tri.material_idx = @intCast(mesh.material.?);
 
-            var clipped_triangle: [8]Tri = undefined;
-            var count: u8 = 1;
-            clipped_triangle[0] = tri;
+                var clipped_triangle: [8]Tri = undefined;
+                const count: u8 = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
 
-            if (culling_result == .on_plane) {
-                count = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
+                for (clipped_triangle, 0..) |triangle, t_idx| {
+                    if (t_idx >= count) break;
+                    try tris.append(allocator, triangle);
+                }
             }
+        } else if (culling_result == .inside) {
+            var i: u32 = 0;
+            while (i < indices_len) : (i += 3) {
+                var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
+                tri.material_idx = @intCast(mesh.material.?);
 
-            for (clipped_triangle, 0..) |triangle, t_idx| {
-                if (t_idx >= count) break;
-                try tris.append(allocator, triangle);
+                try tris.append(allocator, tri);
             }
         }
     }
