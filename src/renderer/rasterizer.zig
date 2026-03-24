@@ -379,6 +379,12 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
             // TODO: Reinstate backface culling
             const tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
 
+            const face_normal = (Vec3.add(tri.v0.normal, tri.v1.normal).add(tri.v2.normal)).multf(1.0 / 3.0);
+
+            if (Vec3.dot(face_normal, Vec3.normalize(Vec3.sub(camera_pos, tri.v0.world_position))) <= -0.25) {
+                continue;
+            }
+
             var clipped_triangle: [8]Tri = undefined;
             var count: u8 = 1;
             clipped_triangle[0] = tri;
@@ -397,10 +403,11 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
                 const a = Vec4.ndcToRaster(new_tri.v0.position, width_f32, height_f32);
                 const b = Vec4.ndcToRaster(new_tri.v1.position, width_f32, height_f32);
                 const c = Vec4.ndcToRaster(new_tri.v2.position, width_f32, height_f32);
+                const area = edgeFunction(a, b, c.x, c.y);
+
+                if (area <= 0.0) continue;
 
                 if (AABB.getFrom(a.x, a.y, b.x, b.y, c.x, c.y)) |aabb| {
-                    const area = edgeFunction(a, b, c.x, c.y);
-
                     const xf32 = @as(f32, @floatFromInt(aabb.min_x));
                     const yf32 = @as(f32, @floatFromInt(aabb.min_y));
 
