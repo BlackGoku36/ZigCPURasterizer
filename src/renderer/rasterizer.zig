@@ -272,34 +272,13 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
 
         const indices_len: usize = mesh.indices_32.len;
 
-        // std.debug.print("Mesh name: {s}\n", .{mesh.name});
-        var active_material: Material = undefined;
-        if (mesh.material) |material_idx| {
-            active_material = scene.materials.items[material_idx];
-        } else {
-            active_material = Material{
-                .pbr_solid = PBRSolid{
-                    .albedo = RGB{ .x = 1.0, .y = 0.0, .z = 0.0 },
-                    .metallic = 0.5,
-                    .roughness = 0.5,
-                    .ao = 0.1,
-                    .emissive = RGB{ .x = 1.0, .y = 1.0, .z = 1.0 },
-                    .transmission = 0.0,
-                    .ior = 1.5,
-                },
-                .pbr_texture = null,
-                .name = "Material Less",
-                .tex_coord = 0,
-                .type = .Solid,
-                .blend = false,
-            };
-        }
+        const active_material: Material = scene.materials.items[mesh.material];
 
         if (culling_result == .on_plane) {
             var i: u32 = 0;
             while (i < indices_len) : (i += 3) {
                 var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
-                tri.material_idx = @intCast(mesh.material.?);
+                tri.material_idx = @intCast(mesh.material);
 
                 var clipped_triangle: [8]Tri = undefined;
                 const count: u8 = Tri.clipAgainstFrustrum(tri, &clipped_triangle);
@@ -313,7 +292,7 @@ pub fn processMeshes(meshes: std.ArrayList(Mesh), vp_matrix: Matrix4) !void {
             var i: u32 = 0;
             while (i < indices_len) : (i += 3) {
                 var tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
-                tri.material_idx = @intCast(mesh.material.?);
+                tri.material_idx = @intCast(mesh.material);
 
                 try tris.append(allocator, tri);
             }
@@ -351,32 +330,10 @@ pub fn renderOpaqueMeshes(view_projection_mat: Matrix4) !void {
         var indices_len: usize = 0;
         indices_len = mesh.indices_32.len;
 
-        // std.debug.print("Mesh name: {s}\n", .{mesh.name});
-        var active_material: Material = undefined;
-        if (mesh.material) |material_idx| {
-            active_material = scene.materials.items[material_idx];
-        } else {
-            active_material = Material{
-                .pbr_solid = PBRSolid{
-                    .albedo = RGB{ .x = 1.0, .y = 0.0, .z = 0.0 },
-                    .metallic = 0.5,
-                    .roughness = 0.5,
-                    .ao = 0.1,
-                    .emissive = RGB{ .x = 1.0, .y = 1.0, .z = 1.0 },
-                    .transmission = 1.0,
-                    .ior = 1.5,
-                },
-                .pbr_texture = null,
-                .name = "Material Less",
-                .tex_coord = 0,
-                .type = .Solid,
-                .blend = false,
-            };
-        }
+        const active_material: Material = scene.materials.items[mesh.material];
 
         var i: u32 = 0;
         while (i < indices_len) : (i += 3) {
-            // TODO: Reinstate backface culling
             const tri = vertexFunction(i, mesh, active_material.type, active_material.tex_coord, model_view_projection_mat);
 
             const face_normal = (Vec3.add(tri.v0.normal, tri.v1.normal).add(tri.v2.normal)).multf(1.0 / 3.0);

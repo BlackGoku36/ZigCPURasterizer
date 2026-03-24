@@ -23,7 +23,7 @@ pub const Mesh = struct {
     name: []u8,
     indices_32: []u32,
     transform: Matrix4,
-    material: ?usize,
+    material: usize,
     winding_order: WindingOrder = .CCW,
     should_render: bool = true,
     // bounding_sphere: geometry.BoundingSphere,
@@ -174,6 +174,13 @@ pub fn getMeshFromNode(
         const bounding_structure = geometry.getBoundingStructure(vertices, vertices.len, transform);
 
         const material = gltf.data.materials[p.material.?];
+
+        var material_idx: usize = 0;
+        if (p.material) |mat_idx| {
+            material_idx = mat_idx + 1;
+        } else {
+            material_idx = 0;
+        }
         if (material.transmission_factor > 0.0 or material.transmission_texture != null or material.alpha_mode == .blend) {
             try transcluent_meshes.append(allocator, Mesh{
                 .vertices = vertices,
@@ -184,7 +191,7 @@ pub fn getMeshFromNode(
                 .indices_32 = indices_32,
                 .name = name,
                 .transform = transform,
-                .material = p.material,
+                .material = material_idx,
                 .winding_order = winding_order,
                 // .bounding_sphere = bounding_sphere,
                 .bounding_structure = bounding_structure,
@@ -199,7 +206,7 @@ pub fn getMeshFromNode(
                 .indices_32 = indices_32,
                 .name = name,
                 .transform = transform,
-                .material = p.material,
+                .material = material_idx,
                 .winding_order = winding_order,
                 // .bounding_sphere = bounding_sphere,
                 .bounding_structure = bounding_structure,
@@ -370,6 +377,19 @@ pub const Scene = struct {
         };
         defer allocator.free(binary);
 
+        //Push default material first, material indexes will be incremented by 1
+        try materials.append(allocator, PBRMaterial.fromGltfConstants(
+            "default material",
+            [_]f32{ 1.0, 0.0, 0.0 },
+            0.1,
+            0.1,
+            1.0,
+            [_]f32{ 1.0, 0.0, 0.0 },
+            0.0,
+            1.0,
+            false,
+        ));
+
         for (gltf.data.materials) |material| {
             std.debug.print("Material Name: {s}\n", .{material.name orelse "name_less"});
             //TODO: Handle "double sided" property
@@ -451,7 +471,7 @@ pub const Scene = struct {
                                     area_vert4 = Matrix4.multVec3Point(transform, area_vert4);
                                 }
 
-                                const material_idx = m.material.?;
+                                const material_idx = m.material;
                                 const mesh_material = materials.items[material_idx];
                                 const emission = mesh_material.pbr_solid.?.emissive;
 
